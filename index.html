@@ -86,6 +86,13 @@ input::placeholder{color:var(--mut);opacity:.85}
 .btn.wa{background:#15803D;margin-top:14px}.btn.o{background:transparent;color:var(--blue);border:1px solid var(--line);margin-top:9px}
 label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 .row{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}.row span{flex:1;min-width:0}
+.admin-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.admin-product{display:grid;gap:3px;min-width:0}.admin-product strong{overflow-wrap:anywhere;font-size:13px}.admin-product small{color:var(--mut);font-size:11px}
+.admin-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;flex:none}
+.rate-tools{display:grid;gap:8px;margin:12px 0 16px}
+.rate-tools .notice{margin:0}
+.btn.secondary{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
 .mini{min-height:36px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:6px 10px;font-size:12px;cursor:pointer}
 #adm{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0));z-index:10;width:auto;padding-inline:20px;box-shadow:0 8px 24px rgba(29,78,216,.4)}
 @media(min-width:620px){.grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.w{padding-inline:28px}}
@@ -110,7 +117,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 <div class="chips" id="chips" role="group" aria-label="Filtrer par catégorie"></div>
 <section aria-labelledby="catalog-title"><div class="bar"><h2 id="catalog-title">Le catalogue <span class="mu">(<span id="count" aria-live="polite">0</span>)</span></h2><label class="sr" for="sort">Trier les articles</label><select id="sort"><option value="new">Plus récents</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option></select></div>
 <div class="grid" id="grid" aria-live="polite" aria-busy="true"><p class="empty">Chargement du catalogue…</p></div></section>
-<footer class="foot"><p>LubuMarket · Lubumbashi, République démocratique du Congo</p><p id="contact"></p></footer>
+<footer class="foot"><p>LubuMarket · Lubumbashi, République démocratique du Congo</p><p id="contact"></p><p>Taux USD/CDF indicatif fourni par <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a> · Le prix en FC fait foi.</p></footer>
 </main>
 <button class="btn" id="adm" hidden>Espace gérant</button>
 <div class="ovl" id="ov" hidden></div>
@@ -173,6 +180,66 @@ function renderList(){
 const ov=h=>{if($('#ov').hidden)focusBeforeModal=document.activeElement;$('#ov').innerHTML=h;$('#ov').hidden=false;requestAnimationFrame(()=>$('#ov .x')?.focus())};
 const closeOv=()=>{$('#ov').hidden=true;$('#ov').innerHTML='';focusBeforeModal?.focus();focusBeforeModal=null};
 
+const FX_CACHE_KEY='lubumarket.usd-cdf-rate';
+const FX={rate:0,updatedAt:0,nextUpdate:0,fresh:false,loading:false,lastAttempt:0};
+const formatNumber=n=>Number(n).toLocaleString('fr-FR',{maximumFractionDigits:2});
+const formatRateDate=timestamp=>new Intl.DateTimeFormat('fr-FR',{dateStyle:'medium',timeStyle:'short',timeZone:'Africa/Kinshasa'}).format(new Date(timestamp));
+const setFxNotice=message=>{const el=$('#fx-info');if(el)el.textContent=message};
+function syncUsdPreview(){
+  const fcInput=$('#p-fc'),usdInput=$('#p-usd'),publish=$('#pub');
+  if(!fcInput||!usdInput||!publish)return;
+  const price=Number(fcInput.value);
+  const valid=FX.rate>0&&FX.fresh&&!FX.loading&&fcInput.value!==''&&Number.isFinite(price)&&price>=0;
+  usdInput.value=valid?(price/FX.rate).toFixed(2):'';
+  publish.disabled=!valid;
+}
+async function loadExchangeRate(){
+  if(FX.loading)return;
+  let cached=null;
+  try{cached=JSON.parse(localStorage.getItem(FX_CACHE_KEY)||'null')}catch(error){console.warn('Le taux en cache est illisible.',error)}
+  const validCache=cached&&Number.isFinite(Number(cached.rate))&&Number(cached.rate)>0&&Number.isFinite(Number(cached.updatedAt))&&Number(cached.updatedAt)>0&&Number.isFinite(Number(cached.nextUpdate));
+  if(validCache){
+    FX.rate=Number(cached.rate);FX.updatedAt=Number(cached.updatedAt);FX.nextUpdate=Number(cached.nextUpdate);
+    if(FX.nextUpdate>Date.now()){
+      FX.fresh=true;
+      setFxNotice(`Taux indicatif : 1 USD ≈ ${formatNumber(FX.rate)} FC · publié le ${formatRateDate(FX.updatedAt)}.`);
+      syncUsdPreview();
+      const button=$('#rate-refresh');if(button)button.disabled=true;
+      return;
+    }
+    FX.fresh=false;
+  }else cached=null;
+  const retryWait=60*60*1000-(Date.now()-FX.lastAttempt);
+  if(FX.lastAttempt&&retryWait>0){
+    setFxNotice(cached?`La mise à jour du taux a échoué. Dernier taux publié le ${formatRateDate(FX.updatedAt)} ; réessayez dans ${Math.ceil(retryWait/60000)} min.`:'Le taux USD/CDF est indisponible. Réessayez plus tard.');
+    syncUsdPreview();
+    const button=$('#rate-refresh');if(button)button.disabled=true;
+    return;
+  }
+  FX.loading=true;FX.lastAttempt=Date.now();FX.fresh=false;
+  setFxNotice('Récupération du taux USD/CDF du jour…');
+  syncUsdPreview();
+  const button=$('#rate-refresh');if(button)button.disabled=true;
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+  try{
+    const response=await fetch('https://open.er-api.com/v6/latest/USD',{cache:'no-store',signal:controller.signal});
+    if(!response.ok)throw new Error(`Taux de change indisponible (${response.status}).`);
+    const data=await response.json(),rate=Number(data.rates?.CDF),updatedAt=Number(data.time_last_update_unix)*1000,nextUpdate=Number(data.time_next_update_unix)*1000;
+    if(data.result!=='success'||!Number.isFinite(rate)||rate<=0||!Number.isFinite(updatedAt)||updatedAt<=0||updatedAt>Date.now()+5*60*1000||!Number.isFinite(nextUpdate)||nextUpdate<=Date.now()||nextUpdate<=updatedAt)throw new Error('La source a retourné un taux USD/CDF invalide ou expiré.');
+    FX.rate=rate;FX.updatedAt=updatedAt;FX.nextUpdate=nextUpdate;FX.fresh=true;
+    try{localStorage.setItem(FX_CACHE_KEY,JSON.stringify({rate,updatedAt,nextUpdate}))}catch(error){console.warn('Le taux ne peut pas être mis en cache dans ce navigateur.',error)}
+    setFxNotice(`Taux indicatif : 1 USD ≈ ${formatNumber(rate)} FC · publié le ${formatRateDate(updatedAt)}.`);
+  }catch(error){
+    console.error('Impossible de récupérer le taux USD/CDF.',error);
+    FX.fresh=false;
+    setFxNotice(cached?`API indisponible. Le dernier taux connu date du ${formatRateDate(FX.updatedAt)} ; réessayez dans une heure. La publication reste bloquée pour éviter une conversion périmée.`:'Taux USD/CDF indisponible. Réessayez dans une heure ; la publication est bloquée pour le moment.');
+  }finally{
+    clearTimeout(timeout);FX.loading=false;
+    if(button)button.disabled=FX.fresh||Date.now()-FX.lastAttempt<60*60*1000;
+    syncUsdPreview();
+  }
+}
+
 function detail(id){
   const p=P.find(x=>x.id===id);if(!p)return;
   const nm=((U&&U.displayName)||'').split(' ')[0];
@@ -182,25 +249,32 @@ function detail(id){
   const im=p.imgs||[];
   ov(`<section class="sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button>${im.length?`<div class="gal" aria-label="Photos de ${esc(p.name)}">${im.map((u,i)=>`<img src="${esc(u)}" alt="${esc(p.name)} — photo ${i+1}" loading="${i?'lazy':'eager'}" decoding="async">`).join('')}</div>`:''}<div class="pd"><span class="b">${esc(p.etat||'Article')} · ${Number(p.qty)>0?'En stock':'Disponibilité à confirmer'}</span><h2 id="product-title">${esc(p.name)}</h2><div class="pr" style="font-size:22px">${fc(p.fc)}</div>${p.usd?`<div class="mu">≈ ${esc(p.usd)} $</div>`:''}<p>${esc(p.desc||'Contactez la boutique pour en savoir plus sur cet article.')}</p>${wa?`<a class="btn wa" href="${wa}" target="_blank" rel="noopener">Commander via WhatsApp</a>`:'<p class="mu">Le contact WhatsApp arrive bientôt.</p>'}<a class="btn o" href="${sh}" target="_blank" rel="noopener">Partager cet article</a></div></section>`);
 }
-function admin(){
+function admin(editId=null){
   if(!isOwner)return;
+  const product=editId?P.find(item=>item.id===editId):null;
+  if(editId&&!product){alert('Cet article n’existe plus dans le catalogue.');return}
   ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="admin-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="admin-title">Espace gérant</h2>
-<form id="f"><label for="p-name">Nom de l’article</label><input id="p-name" name="name" required>
-<label for="p-cat">Catégorie</label><select id="p-cat" name="cat">${CATS.map(c=>`<option>${esc(c)}</option>`).join('')}</select>
-<label for="p-fc">Prix en FC</label><input id="p-fc" name="fc" type="number" min="0" required>
-<label for="p-usd">Prix en USD (facultatif)</label><input id="p-usd" name="usd" type="number" min="0" step="0.01">
-<label for="p-etat">État</label><select id="p-etat" name="etat"><option>Neuf</option><option>Très bon</option><option>Bon</option></select>
-<label for="p-qty">Quantité en stock</label><input id="p-qty" name="qty" type="number" min="1" value="1" required>
-<label for="p-desc">Description</label><textarea id="p-desc" name="desc" rows="3"></textarea>
-<label for="p-ph">Photos (1 à 3)</label><input id="p-ph" name="ph" type="file" accept="image/*" multiple>
-<button class="btn" id="pub" style="margin-top:14px">Publier</button></form>
-<h3>Stock actuel</h3>${P.map(p=>`<div class="row"><span>${esc(p.name)} ×${esc(p.qty)}</span><button class="mini" data-sold="${esc(p.id)}">Vendu</button><button class="mini" data-del="${esc(p.id)}">Supprimer</button></div>`).join('')||'<p class="mu">Aucun article.</p>'}
+<h3>${product?'Modifier un article':'Ajouter un article'}</h3>
+<form id="f"><input type="hidden" name="productId" value="${esc(product?.id||'')}">
+<label for="p-name">Nom de l’article</label><input id="p-name" name="name" value="${esc(product?.name||'')}" required>
+<label for="p-cat">Catégorie</label><select id="p-cat" name="cat">${CATS.map(c=>`<option${product?.cat===c?' selected':''}>${esc(c)}</option>`).join('')}</select>
+<label for="p-fc">Prix en FC</label><input id="p-fc" name="fc" type="number" min="0" step="1" value="${esc(product?.fc??'')}" required>
+<div class="rate-tools"><p class="notice" id="fx-info" role="status" aria-live="polite">Récupération du taux USD/CDF…</p><button class="btn secondary" type="button" id="rate-refresh" data-rate-refresh>Actualiser le taux</button></div>
+<label for="p-usd">Équivalent indicatif en USD</label><input id="p-usd" name="usd" type="number" min="0" step="0.01" value="${esc(product?.usd||'')}" readonly required>
+<label for="p-etat">État</label><select id="p-etat" name="etat">${['Neuf','Très bon','Bon'].map(state=>`<option${product?.etat===state?' selected':''}>${state}</option>`).join('')}</select>
+<label for="p-qty">Quantité en stock</label><input id="p-qty" name="qty" type="number" min="1" step="1" value="${esc(product?.qty??1)}" required>
+<label for="p-desc">Description</label><textarea id="p-desc" name="desc" rows="3">${esc(product?.desc||'')}</textarea>
+<label for="p-ph">Photos (1 à 3)</label><input id="p-ph" name="ph" type="file" accept="image/*" multiple><p class="mu">${product?.imgs?.length?`${product.imgs.length} photo(s) conservée(s) si aucune nouvelle photo n’est choisie.`:'Choisissez jusqu’à 3 photos.'}</p>
+<button class="btn" id="pub" type="submit" style="margin-top:14px" disabled>${product?'Enregistrer les modifications':'Publier l’article'}</button>${product?'<button class="btn secondary" type="button" data-cancel-edit style="margin-top:8px">Annuler la modification</button>':''}</form>
+<h3>Gestion du stock (${P.length})</h3>${P.map(item=>`<div class="admin-row"><div class="admin-product"><strong>${esc(item.name)}</strong><small>${esc(item.qty)} en stock · ${fc(item.fc)}</small></div><div class="admin-actions"><button class="mini" type="button" data-edit="${esc(item.id)}" aria-label="Modifier ${esc(item.name)}">Modifier</button><button class="mini" type="button" data-sold="${esc(item.id)}" aria-label="Enregistrer une vente de ${esc(item.name)}">Vendu</button><button class="mini" type="button" data-del="${esc(item.id)}" aria-label="Supprimer ${esc(item.name)}">Supprimer</button></div></div>`).join('')||'<p class="mu">Aucun article dans le stock.</p>'}
 <h3>Numéro WhatsApp</h3><label for="wan">Numéro WhatsApp de la boutique</label><input id="wan" inputmode="numeric" placeholder="243XXXXXXXXX" value="${esc(WA)}"><button class="btn" type="button" data-wa style="margin-top:8px">Enregistrer le numéro</button></section>`);
+  $('#p-fc').addEventListener('input',syncUsdPreview);
+  loadExchangeRate();
 }
 const shrink=f=>new Promise((resolve,reject)=>{const i=new Image(),url=URL.createObjectURL(f),release=()=>URL.revokeObjectURL(url);i.onload=()=>{try{const s=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;const ctx=c.getContext('2d');if(!ctx)throw new Error('Canvas indisponible');ctx.drawImage(i,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',.72))}catch(error){reject(error)}finally{release()}};i.onerror=()=>{release();reject(new Error('Image illisible'))};i.src=url});
 
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-cat],[data-fav],[data-id],[data-close],[data-sold],[data-del],[data-wa],#adm,#me');
+  const t=e.target.closest('[data-cat],[data-fav],[data-id],[data-close],[data-sold],[data-del],[data-edit],[data-cancel-edit],[data-rate-refresh],[data-wa],#adm,#me');
   if(!t){if(e.target.id==='ov')closeOv();return}
   const d=t.dataset;
   try{
@@ -211,8 +285,11 @@ document.addEventListener('click',async e=>{
     if(t.id==='adm'){admin();return}
     if(t.id==='me'){if(confirm('Se déconnecter ?'))signOut(auth);return}
     if(!isOwner)return;
-    if(d.sold){const p=P.find(x=>x.id===d.sold);if(p){if(p.qty>1)await updateDoc(doc(db,'products',p.id),{qty:p.qty-1});else await deleteDoc(doc(db,'products',p.id))}admin();return}
-    if(d.del){await deleteDoc(doc(db,'products',d.del));admin();return}
+    if('rateRefresh' in d){await loadExchangeRate();return}
+    if('cancelEdit' in d){admin();return}
+    if(d.edit){admin(d.edit);return}
+    if(d.sold){const p=P.find(x=>x.id===d.sold);if(p){if(p.qty>1){await updateDoc(doc(db,'products',p.id),{qty:p.qty-1});P=P.map(item=>item.id===p.id?{...item,qty:p.qty-1}:item)}else{await deleteDoc(doc(db,'products',p.id));P=P.filter(item=>item.id!==p.id)}}admin();return}
+    if(d.del){const p=P.find(x=>x.id===d.del);if(p&&confirm(`Supprimer définitivement « ${p.name} » ?`)){await deleteDoc(doc(db,'products',d.del));P=P.filter(item=>item.id!==d.del);admin()}return}
     if('wa' in d){await setDoc(doc(db,'settings','shop'),{whatsapp:($('#wan').value||'').replace(/\D/g,'')});closeOv()}
   }catch(err){alert('Action refusée ou connexion perdue. Réessayez.')}
 });
@@ -230,10 +307,15 @@ document.addEventListener('submit',async e=>{
   if(e.target.id!=='f')return;e.preventDefault();if(!isOwner)return;
   const f=e.target,fd=new FormData(f),btn=$('#pub');btn.disabled=true;btn.textContent='Publication…';
   try{
-    const imgs=[];for(const file of [...f.ph.files].slice(0,3))imgs.push(await shrink(file));
-    await addDoc(collection(db,'products'),{name:fd.get('name'),cat:fd.get('cat'),fc:+fd.get('fc'),usd:fd.get('usd')||'',etat:fd.get('etat'),qty:+fd.get('qty'),desc:fd.get('desc')||'',imgs,date:Date.now()});
+    const fcPrice=Number(fd.get('fc')),usdPrice=fcPrice/FX.rate;
+    if(!FX.fresh||FX.loading||!Number.isFinite(fcPrice)||fcPrice<0||!Number.isFinite(usdPrice))throw new Error('Un taux de change valide est nécessaire.');
+    const productId=String(fd.get('productId')||''),existing=P.find(item=>item.id===productId),files=[...f.elements.ph.files].slice(0,3),imgs=files.length?[]:[...(existing?.imgs||[])];
+    for(const file of files)imgs.push(await shrink(file));
+    const product={name:String(fd.get('name')||'').trim(),cat:fd.get('cat'),fc:fcPrice,usd:usdPrice.toFixed(2),usdRate:FX.rate,usdRateUpdatedAt:FX.updatedAt,etat:fd.get('etat'),qty:Number(fd.get('qty')),desc:fd.get('desc')||'',imgs,date:existing?.date||Date.now(),updatedAt:Date.now()};
+    if(productId)await updateDoc(doc(db,'products',productId),product);
+    else await addDoc(collection(db,'products'),product);
     closeOv();
-  }catch(err){alert('Publication impossible. Vérifiez votre connexion.');btn.disabled=false;btn.textContent='Publier'}
+  }catch(err){console.error('Impossible d’enregistrer cet article.',err);alert(err.message==='Un taux de change valide est nécessaire.'?'Le taux du jour n’est pas disponible. Réessayez avant d’enregistrer.':'Enregistrement impossible. Vérifiez les informations et votre connexion.');btn.disabled=false;btn.textContent=fd.get('productId')?'Enregistrer les modifications':'Publier l’article'}
 });
 $('#q').oninput=e=>{st.q=e.target.value;renderList()};
 $('#sort').onchange=e=>{st.sort=e.target.value;renderList()};
