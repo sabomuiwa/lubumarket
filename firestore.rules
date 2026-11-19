@@ -28,14 +28,18 @@ service cloud.firestore {
     function validOrderCreate() {
       return signedIn()
         && request.resource.data.keys().hasOnly([
-          'uid', 'phone', 'items', 'itemQuantities', 'subtotalFc',
+          'uid', 'orderNumber', 'deliveryCode', 'phone', 'items', 'itemQuantities', 'subtotalFc',
           'deliveryType', 'areaId', 'areaName', 'deliveryFeeFc',
           'address', 'landmark', 'mapUrl', 'deliveryDate', 'slotId',
-          'slotLabel', 'slotKey', 'promoCode', 'discountFc', 'totalFc',
+          'slotLabel', 'slotKey', 'gift', 'promoCode', 'promoCollection', 'discountFc', 'totalFc',
           'depositFc', 'paymentProvider', 'paymentNumber', 'status',
-          'expiresAt', 'createdAt'
+          'expiresAt', 'createdAt', 'history'
         ])
         && request.resource.data.uid == request.auth.uid
+        && request.resource.data.orderNumber is string
+        && request.resource.data.orderNumber.matches('^LM-[0-9]{6}-[0-9]{4}$')
+        && request.resource.data.deliveryCode is string
+        && request.resource.data.deliveryCode.matches('^[0-9]{4}$')
         && request.resource.data.status == 'Nouvelle'
         && request.resource.data.items is list
         && request.resource.data.items.size() > 0
@@ -52,7 +56,10 @@ service cloud.firestore {
         && request.resource.data.totalFc == request.resource.data.subtotalFc + request.resource.data.deliveryFeeFc - request.resource.data.discountFc
         && request.resource.data.depositFc is int
         && request.resource.data.depositFc >= 0
-        && request.resource.data.deliveryType in ['retrait', 'livraison']
+        && request.resource.data.deliveryType in ['retrait', 'livraison', 'campus']
+        && request.resource.data.gift is map
+        && request.resource.data.history is list
+        && request.resource.data.history.size() == 1
         && request.resource.data.createdAt == request.time
         && request.resource.data.expiresAt > request.time
         && request.resource.data.expiresAt <= request.time + duration.value(30, 'm');
@@ -61,15 +68,18 @@ service cloud.firestore {
     function expireOrder(orderId) {
       return orderExpired(orderId)
         && request.resource.data.uid == resource.data.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'expiredAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'expiredAt', 'history'])
         && request.resource.data.status == 'Expirée';
     }
 
-    function reserveInventory(productId) {
+    function reserveInventory(inventoryId) {
       let orderId = request.resource.data.lastOrderId;
       let order = orderAfter(orderId).data;
-      let quantity = order.itemQuantities[productId];
+      let quantity = order.itemQuantities[inventoryId];
       let changedHolds = request.resource.data.holds.diff(resource.data.holds);
+      let productId = ('productId' in resource.data) ? resource.data.productId : inventoryId;
+      let product = get(/databases/$(database)/documents/products/$(productId));
+      let stockQty = ('stockQty' in resource.data) ? resource.data.stockQty : product.data.qty;
       return signedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reservedQty', 'holds', 'lastOrderId'])
         && order.uid == request.auth.uid
@@ -82,16 +92,16 @@ service cloud.firestore {
         && changedHolds.removedKeys().size() == 0
         && request.resource.data.holds[orderId] == quantity
         && request.resource.data.reservedQty == resource.data.reservedQty + quantity
-        && request.resource.data.reservedQty <= get(/databases/$(database)/documents/products/$(productId)).data.qty;
+        && request.resource.data.reservedQty <= stockQty;
     }
 
-    function releaseInventory(productId) {
+    function releaseInventory(inventoryId) {
       let orderId = request.resource.data.lastOrderId;
       let order = orderAfter(orderId).data;
       let quantity = resource.data.holds[orderId];
       let changedHolds = resource.data.holds.diff(request.resource.data.holds);
       return orderExpired(orderId)
-        && order.itemQuantities[productId] == quantity
+        && order.itemQuantities[inventoryId] == quantity
         && changedHolds.addedKeys().size() == 0
         && changedHolds.removedKeys().hasOnly([orderId])
         && changedHolds.removedKeys().hasAny([orderId])
@@ -180,7 +190,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if signedIn() && request.auth.uid == userId;
+      allow read: if owner() || (signedIn() && request.auth.uid == userId);
       allow create, update: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['name', 'email', 'favs', 'phone'])
@@ -200,6 +210,21 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read, write: if false;
+    }
+
+    match /zones/{zoneId} {
+      allow read: if signedIn();
+      allow create, update, delete: if owner();
+    }
+
+    match /slots/{slotId} {
+      allow read: if signedIn();
+      allow create, update, delete: if owner();
+    }
+
+    match /pickupPoints/{pickupPointId} {
+      allow read: if signedIn();
+      allow create, update, delete: if owner();
     }
 
     match /announcements/{announcementId} {
@@ -224,15 +249,23 @@ service cloud.firestore {
     match /reservations/{reservationId} {
       allow read: if signedIn();
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['orderId', 'productId', 'qty', 'status', 'expiresAt'])
-        && reservationId == request.resource.data.orderId + '_' + request.resource.data.productId
+        && request.resource.data.keys().hasOnly(['orderId', 'productId', 'variantId', 'inventoryId', 'qty', 'status', 'expiresAt'])
+        && reservationId == request.resource.data.orderId + '_' + request.resource.data.inventoryId
         && request.resource.data.orderId is string
         && request.resource.data.productId is string
+        && request.resource.data.variantId is string
+        && request.resource.data.inventoryId is string
         && request.resource.data.qty is int
         && request.resource.data.status == 'Nouvelle'
         && orderAfter(request.resource.data.orderId).data.uid == request.auth.uid
         && orderAfter(request.resource.data.orderId).data.status == 'Nouvelle'
-        && orderAfter(request.resource.data.orderId).data.itemQuantities[request.resource.data.productId] == request.resource.data.qty
+        && orderAfter(request.resource.data.orderId).data.itemQuantities[request.resource.data.inventoryId] == request.resource.data.qty
+        && ((('productId' in get(/databases/$(database)/documents/inventory/$(request.resource.data.inventoryId)).data)
+              && get(/databases/$(database)/documents/inventory/$(request.resource.data.inventoryId)).data.productId == request.resource.data.productId
+              && get(/databases/$(database)/documents/inventory/$(request.resource.data.inventoryId)).data.variantId == request.resource.data.variantId)
+            || (!('productId' in get(/databases/$(database)/documents/inventory/$(request.resource.data.inventoryId)).data)
+              && request.resource.data.inventoryId == request.resource.data.productId
+              && request.resource.data.variantId == ''))
         && request.resource.data.expiresAt == orderAfter(request.resource.data.orderId).data.expiresAt;
       allow update: if owner() || (
         orderExpired(resource.data.orderId)
@@ -270,6 +303,13 @@ service cloud.firestore {
     }
 
     match /promoCodes/{code} {
+      allow get: if signedIn();
+      allow list: if owner();
+      allow create, delete: if owner();
+      allow update: if owner() || reservePromo(code) || releasePromo();
+    }
+
+    match /promos/{code} {
       allow get: if signedIn();
       allow list: if owner();
       allow create, delete: if owner();
