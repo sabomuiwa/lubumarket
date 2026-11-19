@@ -1,0 +1,301 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owner() {
+      return signedIn()
+        && request.auth.token.email == 'djodjojsk6@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function orderAfter(orderId) {
+      return getAfter(/databases/$(database)/documents/orders/$(orderId));
+    }
+
+    function orderExpired(orderId) {
+      let before = get(/databases/$(database)/documents/orders/$(orderId));
+      let after = orderAfter(orderId);
+      return signedIn()
+        && before.data.status == 'Nouvelle'
+        && request.time >= before.data.expiresAt
+        && after.data.status == 'Expirée'
+        && after.data.expiredAt == request.time;
+    }
+
+    function validOrderCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'uid', 'phone', 'items', 'itemQuantities', 'subtotalFc',
+          'deliveryType', 'areaId', 'areaName', 'deliveryFeeFc',
+          'address', 'landmark', 'mapUrl', 'deliveryDate', 'slotId',
+          'slotLabel', 'slotKey', 'promoCode', 'discountFc', 'totalFc',
+          'depositFc', 'paymentProvider', 'paymentNumber', 'status',
+          'expiresAt', 'createdAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'Nouvelle'
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 10
+        && request.resource.data.itemQuantities is map
+        && request.resource.data.itemQuantities.size() == request.resource.data.items.size()
+        && request.resource.data.subtotalFc is int
+        && request.resource.data.subtotalFc >= 0
+        && request.resource.data.deliveryFeeFc is int
+        && request.resource.data.deliveryFeeFc >= 0
+        && request.resource.data.discountFc is int
+        && request.resource.data.discountFc >= 0
+        && request.resource.data.discountFc <= request.resource.data.subtotalFc
+        && request.resource.data.totalFc == request.resource.data.subtotalFc + request.resource.data.deliveryFeeFc - request.resource.data.discountFc
+        && request.resource.data.depositFc is int
+        && request.resource.data.depositFc >= 0
+        && request.resource.data.deliveryType in ['retrait', 'livraison']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(30, 'm');
+    }
+
+    function expireOrder(orderId) {
+      return orderExpired(orderId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'expiredAt'])
+        && request.resource.data.status == 'Expirée';
+    }
+
+    function reserveInventory(productId) {
+      let orderId = request.resource.data.lastOrderId;
+      let order = orderAfter(orderId).data;
+      let quantity = order.itemQuantities[productId];
+      let changedHolds = request.resource.data.holds.diff(resource.data.holds);
+      return signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reservedQty', 'holds', 'lastOrderId'])
+        && order.uid == request.auth.uid
+        && order.status == 'Nouvelle'
+        && order.expiresAt > request.time
+        && quantity is int
+        && quantity > 0
+        && !resource.data.holds.keys().hasAny([orderId])
+        && changedHolds.addedKeys().hasOnly([orderId])
+        && changedHolds.removedKeys().size() == 0
+        && request.resource.data.holds[orderId] == quantity
+        && request.resource.data.reservedQty == resource.data.reservedQty + quantity
+        && request.resource.data.reservedQty <= get(/databases/$(database)/documents/products/$(productId)).data.qty;
+    }
+
+    function releaseInventory(productId) {
+      let orderId = request.resource.data.lastOrderId;
+      let order = orderAfter(orderId).data;
+      let quantity = resource.data.holds[orderId];
+      let changedHolds = resource.data.holds.diff(request.resource.data.holds);
+      return orderExpired(orderId)
+        && order.itemQuantities[productId] == quantity
+        && changedHolds.addedKeys().size() == 0
+        && changedHolds.removedKeys().hasOnly([orderId])
+        && changedHolds.removedKeys().hasAny([orderId])
+        && request.resource.data.reservedQty == resource.data.reservedQty - quantity
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reservedQty', 'holds', 'lastOrderId']);
+    }
+
+    function reserveSlot(slotKey) {
+      let orderId = request.resource.data.lastOrderId;
+      let order = orderAfter(orderId).data;
+      let changedHolds = request.resource.data.holds.diff(resource.data.holds);
+      let shop = get(/databases/$(database)/documents/settings/shop).data;
+      return signedIn()
+        && order.uid == request.auth.uid
+        && order.status == 'Nouvelle'
+        && order.expiresAt > request.time
+        && order.slotKey == slotKey
+        && order.slotKey == order.deliveryDate + '_' + order.slotId
+        && !resource.data.holds.keys().hasAny([orderId])
+        && changedHolds.addedKeys().hasOnly([orderId])
+        && changedHolds.removedKeys().size() == 0
+        && request.resource.data.holds[orderId] == true
+        && request.resource.data.count == resource.data.count + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'holds', 'lastOrderId'])
+        && shop.slotMaxima[order.slotId] is int
+        && request.resource.data.count <= shop.slotMaxima[order.slotId];
+    }
+
+    function createSlot(slotKey) {
+      let orderId = request.resource.data.lastOrderId;
+      let order = orderAfter(orderId).data;
+      let shop = get(/databases/$(database)/documents/settings/shop).data;
+      return signedIn()
+        && request.resource.data.keys().hasOnly(['count', 'holds', 'lastOrderId'])
+        && request.resource.data.count == 1
+        && request.resource.data.holds.keys().hasOnly([orderId])
+        && request.resource.data.holds[orderId] == true
+        && order.uid == request.auth.uid
+        && order.status == 'Nouvelle'
+        && order.expiresAt > request.time
+        && order.slotKey == slotKey
+        && order.slotKey == order.deliveryDate + '_' + order.slotId
+        && shop.slotMaxima[order.slotId] is int
+        && request.resource.data.count <= shop.slotMaxima[order.slotId];
+    }
+
+    function releaseSlot(slotKey) {
+      let orderId = request.resource.data.lastOrderId;
+      let changedHolds = resource.data.holds.diff(request.resource.data.holds);
+      return orderExpired(orderId)
+        && orderAfter(orderId).data.slotKey == slotKey
+        && resource.data.holds[orderId] == true
+        && changedHolds.addedKeys().size() == 0
+        && changedHolds.removedKeys().hasOnly([orderId])
+        && changedHolds.removedKeys().hasAny([orderId])
+        && request.resource.data.count == resource.data.count - 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count', 'holds', 'lastOrderId']);
+    }
+
+    function reservePromo(code) {
+      let orderId = request.resource.data.lastOrderId;
+      let order = orderAfter(orderId).data;
+      return signedIn()
+        && resource.data.active == true
+        && resource.data.usedCount < resource.data.usageLimit
+        && resource.data.expiresAt > request.time
+        && order.uid == request.auth.uid
+        && order.status == 'Nouvelle'
+        && order.promoCode == code
+        && request.resource.data.usedCount == resource.data.usedCount + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount', 'lastOrderId']);
+    }
+
+    function releasePromo() {
+      let orderId = request.resource.data.lastOrderId;
+      return orderExpired(orderId)
+        && orderAfter(orderId).data.promoCode == resource.data.code
+        && resource.data.usedCount > 0
+        && request.resource.data.usedCount == resource.data.usedCount - 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount', 'lastOrderId']);
+    }
+
+    match /products/{productId} {
+      allow read: if signedIn();
+      allow create, update, delete: if owner();
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['name', 'email', 'favs', 'phone'])
+        && (!('email' in request.resource.data) || request.resource.data.email == request.auth.token.email)
+        && (!('favs' in request.resource.data) || request.resource.data.favs is list);
+      allow delete: if false;
+    }
+
+    match /settings/shop {
+      allow read: if signedIn();
+      allow write: if owner();
+    }
+
+    match /settings/deliveryPrivate {
+      allow read, write: if owner();
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if false;
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create, update, delete: if owner();
+    }
+
+    match /orders/{orderId} {
+      allow read: if owner() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if validOrderCreate();
+      allow update: if owner() || expireOrder(orderId);
+      allow delete: if false;
+    }
+
+    match /inventory/{productId} {
+      allow read: if signedIn();
+      allow create: if owner();
+      allow update: if owner() || reserveInventory(productId) || releaseInventory(productId);
+      allow delete: if owner();
+    }
+
+    match /reservations/{reservationId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['orderId', 'productId', 'qty', 'status', 'expiresAt'])
+        && reservationId == request.resource.data.orderId + '_' + request.resource.data.productId
+        && request.resource.data.orderId is string
+        && request.resource.data.productId is string
+        && request.resource.data.qty is int
+        && request.resource.data.status == 'Nouvelle'
+        && orderAfter(request.resource.data.orderId).data.uid == request.auth.uid
+        && orderAfter(request.resource.data.orderId).data.status == 'Nouvelle'
+        && orderAfter(request.resource.data.orderId).data.itemQuantities[request.resource.data.productId] == request.resource.data.qty
+        && request.resource.data.expiresAt == orderAfter(request.resource.data.orderId).data.expiresAt;
+      allow update: if owner() || (
+        orderExpired(resource.data.orderId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'Expirée'
+      );
+      allow delete: if false;
+    }
+
+    match /slotReservations/{orderId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['orderId', 'slotKey', 'status', 'expiresAt'])
+        && request.resource.data.orderId == orderId
+        && request.resource.data.status == 'Nouvelle'
+        && orderAfter(orderId).data.uid == request.auth.uid
+        && orderAfter(orderId).data.status == 'Nouvelle'
+        && orderAfter(orderId).data.slotKey == request.resource.data.slotKey
+        && request.resource.data.expiresAt == orderAfter(orderId).data.expiresAt;
+      allow update: if owner() || (
+        orderExpired(orderId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'Expirée'
+      );
+      allow delete: if false;
+    }
+
+    match /slotCounters/{slotKey} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['count', 'holds', 'lastOrderId'])
+        && createSlot(slotKey);
+      allow update: if owner() || reserveSlot(slotKey) || releaseSlot(slotKey);
+      allow delete: if owner();
+    }
+
+    match /promoCodes/{code} {
+      allow get: if signedIn();
+      allow list: if owner();
+      allow create, delete: if owner();
+      allow update: if owner() || reservePromo(code) || releasePromo();
+    }
+
+    match /promoRedemptions/{orderId} {
+      allow read: if owner() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'code', 'orderId', 'status', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.orderId == orderId
+        && request.resource.data.status == 'Nouvelle'
+        && orderAfter(orderId).data.uid == request.auth.uid
+        && orderAfter(orderId).data.promoCode == request.resource.data.code;
+      allow update: if owner() || (
+        signedIn()
+        && orderExpired(orderId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'Expirée'
+      );
+      allow delete: if owner();
+    }
+
+    match /orderFinance/{orderId} {
+      allow read, write: if owner();
+    }
+  }
+}

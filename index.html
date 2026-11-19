@@ -106,6 +106,37 @@ label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 .admin-note form{margin:0}
 .toggle-line{display:flex;align-items:center;gap:9px;color:var(--ink);font-size:13px}
 .toggle-line input{width:20px;min-height:20px;height:20px;margin:0;accent-color:var(--blue)}
+.cart-button{position:relative;width:auto;min-width:50px;min-height:44px;padding:8px 13px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font-weight:700;cursor:pointer}
+.cart-count{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:4px;padding:0 5px;border-radius:20px;background:var(--blue);color:#fff;font-size:11px}
+.card-actions{display:flex;gap:8px;margin-top:12px}
+.card-actions .mini{flex:1}
+.admin-section{margin:18px 0;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.admin-section h3{margin:0 0 10px}
+.order-card{margin:12px 0;padding:15px;border:1px solid var(--line);border-radius:15px;background:var(--card)}
+.order-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.order-head h3{margin:0;font-size:15px}.order-meta{color:var(--mut);font-size:12px}
+.order-lines{margin:10px 0;padding:0;list-style:none;font-size:13px}
+.order-lines li{padding:4px 0;border-bottom:1px solid var(--line)}
+.order-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.order-actions .mini{flex:1 1 auto}
+.order-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.checkout-total{display:flex;justify-content:space-between;gap:12px;padding:7px 0;color:var(--mut);font-size:13px}
+.checkout-total strong{color:var(--ink)}
+.checkout-total.final{margin-top:5px;padding-top:12px;border-top:1px solid var(--line);font-size:17px;font-weight:800}
+.cart-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:12px 0;border-bottom:1px solid var(--line)}
+.cart-line strong{display:block;font-size:13px}.cart-line small{color:var(--mut)}
+.qty-controls{display:flex;align-items:center;gap:8px}
+.qty-controls button{width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);cursor:pointer}
+.announcement-link{display:inline-flex;margin-top:8px;color:var(--blue);font-weight:700;text-decoration:none}
+.announcement-dots{display:flex;gap:5px;margin-top:8px}
+.announcement-dots i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.announcement-dots i.on{background:var(--blue)}
+.characteristics{width:100%;margin:16px 0;border-collapse:collapse;font-size:13px}
+.characteristics th,.characteristics td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left}
+.characteristics th{width:40%;color:var(--mut);font-weight:600}
+.receipt{padding:15px;border:1px dashed var(--line);border-radius:12px}
+.receipt h3{margin:0 0 8px}
+.warn{color:#A34400}
 .question-icon{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border:1.5px solid currentColor;border-radius:50%;font-size:12px;font-weight:800;line-height:1}
 .foot{justify-content:center}
 .foot #contact{display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid var(--line);border-radius:999px;background:var(--card)}
@@ -128,7 +159,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 <div class="err" id="err" role="alert" aria-live="polite"></div>
 </section>
 <main class="w" id="app" hidden>
-<header><a class="logo" href="./" aria-label="LubuMarket, accueil">Lubu<b>Market</b></a><button class="me" id="me" type="button" aria-label="Compte utilisateur"></button></header>
+<header><a class="logo" href="./" aria-label="LubuMarket, accueil">Lubu<b>Market</b></a><div style="display:flex;align-items:center;gap:8px"><button class="cart-button" id="open-orders" type="button">Mes commandes</button><button class="cart-button" id="open-cart" type="button" aria-label="Ouvrir le panier">Panier <span class="cart-count" id="cart-count">0</span></button><button class="me" id="me" type="button" aria-label="Compte utilisateur"></button></div></header>
 <label class="sr" for="q">Rechercher dans les articles</label>
 <div class="search"><input id="q" type="search" placeholder="Rechercher un article…" autocomplete="off"></div>
 <section class="announcement" id="announcement" data-type="promo" aria-live="polite" hidden></section>
@@ -145,7 +176,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 import {initializeApp} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
 import {initializeAppCheck,ReCaptchaEnterpriseProvider} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app-check.js";
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
-import {getFirestore,collection,doc,onSnapshot,addDoc,setDoc,deleteDoc,updateDoc,arrayUnion,arrayRemove} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import {getFirestore,collection,doc,onSnapshot,addDoc,setDoc,deleteDoc,updateDoc,arrayUnion,arrayRemove,getDoc,getDocs,query,where,writeBatch,runTransaction,serverTimestamp,Timestamp,deleteField} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 
 /* 1) Collez ici la configuration de votre application web Firebase */
 const firebaseConfig={apiKey:"AIzaSyAbx13iRKix9bBchIv5YK_sJXbUYYRJ8Yo",authDomain:"lubumarket-29a24.firebaseapp.com",projectId:"lubumarket-29a24",storageBucket:"lubumarket-29a24.firebasestorage.app",messagingSenderId:"1085554582697",appId:"1:1085554582697:web:dd305cfbc26240869c35b8"};
@@ -163,19 +194,76 @@ const CATS=['Téléphones','Ordinateurs','Accessoires','Beauté & mode femme','V
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fc=n=>Number(n).toLocaleString('fr-FR')+' FC';
-let U=null,isOwner=false,P=[],favs=[],WA='',announcement={},unsub=[],focusBeforeModal=null;
+const DEFAULT_SLOTS=[{id:'matin',start:'10:00',end:'12:00',max:10,cutoff:'08:00'},{id:'apres-midi',start:'16:00',end:'18:00',max:10,cutoff:'14:00'}];
+const SHOP_DEFAULTS={whatsapp:'',pickupPoint:'',neighborhoods:[],slots:DEFAULT_SLOTS,slotMaxima:{matin:10,'apres-midi':10},depositPercent:0,paymentNumbers:{},announcement:{}};
+let U=null,isOwner=false,P=[],favs=[],WA='',announcement={},announcements=[],reservations=[],slotBookings=[],orders=[],orderFinance=[],shop={...SHOP_DEFAULTS},privateDelivery={},promoRedemptions=[],promoCodes=[],userProfile={},unsub=[],focusBeforeModal=null,cart={},cartPromo=null,aiModule=null,announcementTimer=null,expiryTimer=null;
 const st={cat:'Tout',q:'',sort:'new'};
 const setNotice=(message,error=false)=>{const el=$('#notice');el.textContent=message;el.classList.toggle('error',error);el.hidden=!message};
+const timeMs=value=>Number(value?.toMillis?.()??value??0);
+const expirationInFlight=new Set();
+const cartKey=()=>`lubumarket.cart.${U?.uid||'guest'}`;
+function loadCart(){try{const saved=JSON.parse(localStorage.getItem(cartKey())||'{}');cart=saved&&typeof saved==='object'?saved:{}}catch(error){console.warn('Le panier local est illisible.',error);cart={}}}
+function saveCart(){try{localStorage.setItem(cartKey(),JSON.stringify(cart))}catch(error){console.warn('Le panier ne peut pas être enregistré sur cet appareil.',error)}}
+function cartQuantity(){return Object.values(cart).reduce((sum,qty)=>sum+(Number(qty)||0),0)}
+function renderCartCount(){$('#cart-count').textContent=cartQuantity()}
+function activeReservationsFor(productId,now=Date.now()){return reservations.filter(item=>item.productId===productId&&item.status==='Nouvelle'&&timeMs(item.expiresAt)>now)}
+function availableQuantity(productId,now=Date.now()){const product=P.find(item=>item.id===productId);return Math.max(0,Number(product?.qty||0)-activeReservationsFor(productId,now).reduce((sum,item)=>sum+Number(item.qty||0),0))}
+function expireReservationsLocally(){
+  const now=Date.now(),expired=reservations.filter(item=>item.status==='Nouvelle'&&timeMs(item.expiresAt)<=now);
+  const orderIds=[...new Set(expired.map(item=>item.orderId).filter(Boolean))];
+  if(!expired.length)return;
+  for(const orderId of orderIds){
+    if(expirationInFlight.has(orderId))continue;
+    expirationInFlight.add(orderId);
+    const holds=expired.filter(item=>item.orderId===orderId);
+    runTransaction(db,async transaction=>{
+      const orderRef=doc(db,'orders',orderId),orderSnapshot=await transaction.get(orderRef);
+      if(!orderSnapshot.exists()||orderSnapshot.data().status!=='Nouvelle'||timeMs(orderSnapshot.data().expiresAt)>Date.now())return;
+      const inventoryRefs=holds.map(item=>doc(db,'inventory',item.productId)),inventorySnapshots=await Promise.all(inventoryRefs.map(ref=>transaction.get(ref)));
+      const order=orderSnapshot.data(),slotRef=doc(db,'slotReservations',orderId),slotSnapshot=order.slotKey?await transaction.get(slotRef):null,slotCounterRef=order.slotKey?doc(db,'slotCounters',order.slotKey):null,slotCounterSnapshot=slotCounterRef?await transaction.get(slotCounterRef):null,promoRef=order.promoCode?doc(db,'promoCodes',order.promoCode):null,promoSnapshot=promoRef?await transaction.get(promoRef):null,redemptionRef=order.promoCode?doc(db,'promoRedemptions',orderId):null,redemptionSnapshot=redemptionRef?await transaction.get(redemptionRef):null;
+      holds.forEach((item,index)=>{
+        const inventory=inventorySnapshots[index];if(inventory.exists())transaction.update(inventoryRefs[index],{reservedQty:Math.max(0,Number(inventory.data().reservedQty||0)-Number(item.qty||0)),[`holds.${orderId}`]:deleteField(),lastOrderId:orderId});
+        transaction.update(doc(db,'reservations',item.id),{status:'Expirée'});
+      });
+      if(slotSnapshot?.exists())transaction.update(slotRef,{status:'Expirée'});
+      if(slotCounterSnapshot?.exists()&&slotCounterSnapshot.data().holds?.[orderId])transaction.update(slotCounterRef,{count:Math.max(0,Number(slotCounterSnapshot.data().count||0)-1),[`holds.${orderId}`]:deleteField(),lastOrderId:orderId});
+      if(promoSnapshot?.exists())transaction.update(promoRef,{usedCount:Math.max(0,Number(promoSnapshot.data().usedCount||0)-1),lastOrderId:orderId});
+      if(redemptionSnapshot?.exists())transaction.update(redemptionRef,{status:'Expirée'});
+      transaction.update(orderRef,{status:'Expirée',expiredAt:serverTimestamp()});
+    }).catch(error=>console.warn('Impossible de libérer la réservation expirée.',error)).finally(()=>expirationInFlight.delete(orderId));
+  }
+}
 function renderAnnouncement(value){
   const el=$('#announcement'),item=value||{},types={promo:'Promotion',nouveaute:'Nouveauté',arrivage:'Nouvel arrivage',info:'Information'};
   if(!item.active||!item.title||!item.message){el.hidden=true;el.innerHTML='';return}
-  const updatedAt=Number(item.updatedAt),date=Number.isFinite(updatedAt)&&updatedAt>0?new Intl.DateTimeFormat('fr-FR',{dateStyle:'medium',timeZone:'Africa/Kinshasa'}).format(new Date(updatedAt)):'';
   const type=types[item.type]?item.type:'info';
   el.dataset.type=type;
-  el.innerHTML=`<span class="announcement-mark" aria-hidden="true">${type==='promo'?'%':type==='nouveaute'?'✦':type==='arrivage'?'↗':'i'}</span><div><h2>${esc(item.title)}</h2><p>${esc(item.message)}</p>${date?`<small>${types[type]} · ${date}</small>`:`<small>${types[type]}</small>`}</div>`;
+  const image=item.imageUrl?`<img src="${esc(item.imageUrl)}" alt="" loading="lazy" decoding="async" style="width:64px;height:64px;object-fit:cover;border-radius:12px">`:'';
+  const action=item.buttonLabel&&item.target?`<a class="announcement-link" href="#catalog" data-announcement-type="${esc(item.targetType||'')}" data-announcement-target="${esc(item.target)}">${esc(item.buttonLabel)}</a>`:'';
+  const updatedAt=Number(item.updatedAt),date=Number.isFinite(updatedAt)&&updatedAt>0?new Intl.DateTimeFormat('fr-FR',{dateStyle:'medium',timeZone:'Africa/Kinshasa'}).format(new Date(updatedAt)):'';
+  el.innerHTML=`${image}<span class="announcement-mark" aria-hidden="true">${type==='promo'?'%':type==='nouveaute'?'✦':type==='arrivage'?'↗':'i'}</span><div><h2>${esc(item.title)}</h2><p>${esc(item.message)}</p>${action}${date?`<small>${types[type]} · ${date}</small>`:`<small>${types[type]}</small>`}</div>`;
   el.hidden=false;
 }
-
+function renderAnnouncementCarousel(){
+  const now=Date.now(),eligible=announcements.filter(item=>item.active&&item.title&&item.message&&(!item.startsAt||Number(item.startsAt)<=now)&&(!item.endsAt||Number(item.endsAt)>now));
+  if(announcementTimer){clearInterval(announcementTimer);announcementTimer=null}
+  if(!eligible.length){renderAnnouncement(null);return}
+  const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Kinshasa'}).format(new Date()),key=`lubumarket.announcements.${U?.uid}.${day}`;
+  let seen=[];try{seen=JSON.parse(localStorage.getItem(key)||'[]')}catch(error){console.warn('Impossible de lire les annonces déjà vues.',error)}
+  let remaining=eligible.filter(item=>!seen.includes(item.id));
+  if(!remaining.length){renderAnnouncement(null);return}
+  let index=0;
+  const showNext=()=>{
+    const item=remaining[index];
+    renderAnnouncement(item);
+    seen=[...new Set([...seen,item.id])];
+    try{localStorage.setItem(key,JSON.stringify(seen))}catch(error){console.warn('Impossible de mémoriser les annonces déjà vues.',error)}
+    index+=1;
+    if(index>=remaining.length){clearInterval(announcementTimer);announcementTimer=null}
+  };
+  showNext();
+  if(remaining.length>1)announcementTimer=setInterval(showNext,8000);
+}
 $('#gbtn').onclick=async()=>{
   const pr=new GoogleAuthProvider();$('#err').textContent='';
   try{await signInWithPopup(auth,pr)}catch(e){
@@ -184,10 +272,12 @@ $('#gbtn').onclick=async()=>{
   }
 };
 onAuthStateChanged(auth,u=>{
-  unsub.forEach(f=>f());unsub=[];U=u;P=[];favs=[];WA='';
+  unsub.forEach(f=>f());unsub=[];if(announcementTimer){clearInterval(announcementTimer);announcementTimer=null}if(expiryTimer){clearInterval(expiryTimer);expiryTimer=null}if(!$('#ov').hidden)closeOv();U=u;isOwner=false;P=[];favs=[];WA='';announcements=[];reservations=[];slotBookings=[];orders=[];orderFinance=[];shop={...SHOP_DEFAULTS};privateDelivery={};promoCodes=[];promoRedemptions=[];userProfile={};
   $('#login').hidden=!!u;$('#app').hidden=!u;
-  if(!u){$('#adm').hidden=true;return}
+  if(!u){$('#adm').hidden=true;cart={};renderCartCount();return}
   isOwner=u.email===OWNER&&u.emailVerified;$('#adm').hidden=!isOwner;
+  loadCart();renderCartCount();
+  expiryTimer=setInterval(()=>{expireReservationsLocally();renderList();renderOrders();renderAdminOrders()},30000);
   $('#me').innerHTML=(u.photoURL?`<img src="${esc(u.photoURL)}" alt="">`:`<i>${esc((u.displayName||'?')[0])}</i>`)+esc((u.displayName||'Moi').split(' ')[0]);
   $('#me').setAttribute('aria-label',`Compte de ${(u.displayName||'Moi').split(' ')[0]} — se déconnecter`);
   $('#grid').setAttribute('aria-busy','true');
@@ -195,11 +285,22 @@ onAuthStateChanged(auth,u=>{
   setNotice('');
   unsub.push(onSnapshot(collection(db,'products'),s=>{P=s.docs.map(d=>({id:d.id,...d.data()}));$('#grid').setAttribute('aria-busy','false');setNotice('');renderList()},()=>{setNotice('Le catalogue ne peut pas être actualisé. Vérifiez votre connexion puis réessayez.',true);$('#grid').setAttribute('aria-busy','false');if(!P.length)$('#grid').innerHTML='<p class="empty">Impossible de charger les articles pour le moment.</p>'}));
   unsub.push(onSnapshot(doc(db,'settings','shop'),s=>{
-    const shop=s.data()||{};WA=String(shop.whatsapp||'').replace(/\D/g,'');announcement=shop.announcement||{};
+    shop={...SHOP_DEFAULTS,...(s.data()||{})};WA=String(shop.whatsapp||'').replace(/\D/g,'');announcement=shop.announcement||{};
     $('#contact').innerHTML=WA?`<span class="question-icon" aria-hidden="true">?</span><a href="https://wa.me/${WA}" target="_blank" rel="noopener">Écrivez-nous pour plus d’informations</a>`:'';
-    $('#contact').hidden=!WA;renderAnnouncement(announcement);
+    $('#contact').hidden=!WA;renderAnnouncementCarousel();if($('#ov').querySelector('#shop-settings-form'))renderAdminSettings();
   },()=>{setNotice('Les informations de la boutique sont momentanément indisponibles.',true)}));
-  unsub.push(onSnapshot(doc(db,'users',u.uid),s=>{favs=(s.data()||{}).favs||[];renderList()},error=>{console.error('Impossible de charger les favoris.',error);setNotice('Vos favoris ne peuvent pas être chargés pour le moment.',true)}));
+  unsub.push(onSnapshot(collection(db,'announcements'),s=>{announcements=s.docs.map(d=>({id:d.id,...d.data()}));renderAnnouncementCarousel();renderAdminAnnouncements()} ,error=>{console.error('Impossible de charger les annonces.',error)}));
+  if(isOwner)unsub.push(onSnapshot(collection(db,'promoCodes'),s=>{promoCodes=s.docs.map(d=>({id:d.id,...d.data()}));renderPromoAdminList()},error=>{console.error('Impossible de charger les promotions.',error)}));
+  unsub.push(onSnapshot(collection(db,'reservations'),s=>{reservations=s.docs.map(d=>({id:d.id,...d.data()}));expireReservationsLocally();renderList()},error=>{console.error('Impossible de charger les réservations.',error);setNotice('La disponibilité du stock ne peut pas être actualisée.',true)}));
+  unsub.push(onSnapshot(collection(db,'slotReservations'),s=>{slotBookings=s.docs.map(d=>({id:d.id,...d.data()}));if(!$('#ov').hidden)renderSlotChoices()},error=>{console.error('Impossible de charger les créneaux réservés.',error)}));
+  const orderQuery=isOwner?collection(db,'orders'):query(collection(db,'orders'),where('uid','==',u.uid));
+  unsub.push(onSnapshot(orderQuery,s=>{orders=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>Number(b.createdAt?.toMillis?.()||b.createdAt||0)-Number(a.createdAt?.toMillis?.()||a.createdAt||0));expireReservationsLocally();renderOrders();renderAdminOrders();},error=>{console.error('Impossible de charger les commandes.',error);setNotice('L’historique des commandes ne peut pas être chargé.',true)}));
+  if(isOwner){
+    unsub.push(onSnapshot(doc(db,'settings','deliveryPrivate'),s=>{privateDelivery=s.data()||{};renderAdminOrders();if($('#ov').querySelector('#shop-settings-form'))renderAdminSettings()},error=>{console.error('Impossible de charger les tarifs coursier privés.',error)}));
+    unsub.push(onSnapshot(collection(db,'promoRedemptions'),s=>{promoRedemptions=s.docs.map(d=>({id:d.id,...d.data()}));renderPromoAdminList();},error=>{console.error('Impossible de charger les utilisations promo.',error)}));
+    unsub.push(onSnapshot(collection(db,'orderFinance'),s=>{orderFinance=s.docs.map(d=>({id:d.id,...d.data()}));renderAdminOrders();},error=>{console.error('Impossible de charger les marges des commandes.',error);setNotice('Les coûts de livraison historiques ne peuvent pas être chargés.',true)}));
+  }
+  unsub.push(onSnapshot(doc(db,'users',u.uid),s=>{userProfile=s.data()||{};favs=userProfile.favs||[];renderCartCount();renderList()},error=>{console.error('Impossible de charger les favoris.',error);setNotice('Vos favoris ne peuvent pas être chargés pour le moment.',true)}));
   setDoc(doc(db,'users',u.uid),{name:u.displayName||'',email:u.email||''},{merge:true}).catch(error=>{console.error('Impossible de synchroniser le profil.',error);setNotice('Votre profil n’a pas pu être synchronisé. Vous pouvez tout de même consulter le catalogue.',true)});
 });
 
@@ -210,13 +311,96 @@ function list(){
   return a;
 }
 function card(p){
-  const nw=Date.now()-p.date<7*864e5,im=p.imgs||[],saved=favs.includes(p.id),qty=Number(p.qty)||0;
-  return `<article class="card" data-id="${esc(p.id)}" role="group" aria-label="${esc(p.name)}"><div class="ph">${im[0]?`<img loading="lazy" decoding="async" src="${esc(im[0])}" alt="Photo de ${esc(p.name)}">`:''}<div class="bs"><span class="b">${qty>0?'En stock':'À confirmer'}</span>${nw?'<span class="b nw">Nouveau</span>':''}</div><button class="fav" type="button" data-fav="${esc(p.id)}" aria-label="${saved?'Retirer':'Ajouter'} ${esc(p.name)} ${saved?'des':'aux'} favoris" aria-pressed="${saved}">${saved?'♥':'♡'}</button></div><div class="in"><h3><button class="product-name" type="button" data-id="${esc(p.id)}">${esc(p.name)}</button></h3><div class="pr">${fc(p.fc)}</div>${p.usd?`<div class="mu">≈ ${esc(p.usd)} $</div>`:''}<p class="stock">${qty>0?`${qty} en stock · Voir les détails`:'Disponibilité à confirmer'}</p></div></article>`;
+  const nw=Date.now()-p.date<7*864e5,im=p.imgs||[],saved=favs.includes(p.id),qty=availableQuantity(p.id);
+  const promo=Number(p.promoFc)>0&&Number(p.promoFc)<Number(p.fc)&&(!p.promoEndsAt||Number(p.promoEndsAt)>Date.now());
+  const price=promo?Number(p.promoFc):Number(p.fc);
+  return `<article class="card" data-id="${esc(p.id)}" role="group" aria-label="${esc(p.name)}"><div class="ph">${im[0]?`<img loading="lazy" decoding="async" src="${esc(im[0])}" alt="Photo de ${esc(p.name)}">`:''}<div class="bs"><span class="b">${qty>0?'En stock':'Épuisé'}</span>${nw?'<span class="b nw">Nouveau</span>':''}${promo?'<span class="b" style="background:#C2410C">Promo</span>':''}</div><button class="fav" type="button" data-fav="${esc(p.id)}" aria-label="${saved?'Retirer':'Ajouter'} ${esc(p.name)} ${saved?'des':'aux'} favoris" aria-pressed="${saved}">${saved?'♥':'♡'}</button></div><div class="in"><h3><button class="product-name" type="button" data-id="${esc(p.id)}">${esc(p.name)}</button></h3><div class="pr">${promo?`<del class="mu">${fc(p.fc)}</del> `:''}${fc(price)}</div>${p.usd?`<div class="mu">≈ ${esc(p.usd)} $</div>`:''}<p class="stock">${qty} disponible(s)</p><div class="card-actions"><button class="mini" type="button" data-id="${esc(p.id)}">Détails</button><button class="mini" type="button" data-add="${esc(p.id)}"${qty<1?' disabled':''}>Ajouter</button></div></div></article>`;
 }
 function renderList(){
   $('#chips').innerHTML=['Tout',...CATS].map(c=>{const n=c==='Tout'?P.length:P.filter(p=>p.cat===c).length;return `<button class="chip${st.cat===c?' on':''}" type="button" data-cat="${esc(c)}" aria-pressed="${st.cat===c}">${esc(c)}<span>${n}</span></button>`}).join('');
   const a=list();$('#count').textContent=a.length;
   $('#grid').innerHTML=a.length?a.map(card).join(''):`<p class="empty">${P.length?'Aucun article ne correspond à votre recherche. Essayez un autre mot ou une autre catégorie.':'Le catalogue est en cours de chargement ou ne contient pas encore d’articles.'}</p>`;
+}
+function adjustCart(productId,delta){
+  const qty=Number(cart[productId]||0)+delta,available=availableQuantity(productId);
+  if(qty<=0)delete cart[productId];
+  else if(qty>available){alert(`Stock disponible limité à ${available} article(s).`);return}
+  else cart[productId]=qty;
+  cartPromo=null;saveCart();renderCartCount();if(!$('#ov').hidden)showCart();
+}
+function cartSubtotal(){
+  return Object.entries(cart).reduce((sum,[id,qty])=>{const p=P.find(item=>item.id===id);if(!p)return sum;const unit=Number(p.promoFc)>0&&p.promoEndsAt&&Number(p.promoEndsAt)>Date.now()?Number(p.promoFc):Number(p.fc);return sum+unit*Number(qty)},0);
+}
+function selectedDeliveryFee(){
+  if($('#delivery-type')?.value!=='livraison')return 0;
+  const area=shop.neighborhoods.find(item=>item.id===$('#delivery-area')?.value);
+  return Number(area?.fee||0);
+}
+function currentCheckoutTotal(){
+  const subtotal=cartSubtotal(),delivery=selectedDeliveryFee(),discount=cartPromo?cartPromo.discount:0;
+  return Math.max(0,subtotal+delivery-discount);
+}
+function updateCheckoutSummary(){
+  const summary=$('#checkout-summary');if(!summary)return;
+  const subtotal=cartSubtotal(),delivery=selectedDeliveryFee(),discount=cartPromo?.discount||0,total=Math.max(0,subtotal+delivery-discount),deposit=Math.round(total*Number(shop.depositPercent||0)/100);
+  summary.innerHTML=`<div class="checkout-total"><span>Sous-total</span><strong>${fc(subtotal)}</strong></div><div class="checkout-total"><span>${$('#delivery-type')?.value==='livraison'?'Livraison':'Retrait gratuit'}</span><strong>${fc(delivery)}</strong></div>${discount?`<div class="checkout-total"><span>Réduction (${esc(cartPromo.code)})</span><strong>− ${fc(discount)}</strong></div>`:''}<div class="checkout-total final"><span>Total</span><strong>${fc(total)}</strong></div><div class="checkout-total"><span>Acompte (${Number(shop.depositPercent||0)} %)</span><strong>${fc(deposit)}</strong></div>`;
+  const deliveryFields=$('#delivery-fields'),isDelivery=$('#delivery-type')?.value==='livraison';
+  if(deliveryFields)deliveryFields.hidden=!isDelivery;
+  const areaField=$('#delivery-area');
+  if(areaField&&isDelivery){
+    const fee=selectedDeliveryFee();const feeLabel=$('#delivery-fee-label');if(feeLabel)feeLabel.textContent=areaField.value?`Frais de livraison : ${fc(fee)}`:'Choisissez votre quartier pour voir les frais.';
+  }
+  renderSlotChoices();
+}
+function slotsForShop(){return shop.slots?.length?shop.slots:DEFAULT_SLOTS}
+function dateChoices(){
+  const list=[];
+  for(let offset=0;offset<7;offset++){const date=new Date();date.setDate(date.getDate()+offset);list.push({value:new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Kinshasa'}).format(date),label:offset===0?"Aujourd’hui":offset===1?"Demain":new Intl.DateTimeFormat('fr-FR',{weekday:'long',day:'numeric',month:'long',timeZone:'Africa/Kinshasa'}).format(date)})}
+  return list;
+}
+function renderSlotChoices(){
+  const select=$('#delivery-slot');if(!select)return;
+  const date=$('#delivery-date')?.value||dateChoices()[0].value,now=Date.now(),slots=slotsForShop();
+  const eligible=slots.filter(slot=>{
+    const key=`${date}_${slot.id}`,taken=slotBookings.filter(item=>item.slotKey===key&&(item.status==='Payée'||item.status==='Livrée'||(item.status==='Nouvelle'&&timeMs(item.expiresAt)>now))).length;
+    const current=new Date();const localTime=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Kinshasa',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(current);
+    return taken<Number(slot.max||1)&&(date!==dateChoices()[0].value||localTime<(slot.cutoff||'23:59'));
+  });
+  select.innerHTML=eligible.map(slot=>{const key=`${date}_${slot.id}`,taken=slotBookings.filter(item=>item.slotKey===key&&(item.status==='Payée'||item.status==='Livrée'||(item.status==='Nouvelle'&&timeMs(item.expiresAt)>now))).length;return `<option value="${esc(slot.id)}">${esc(slot.start)}–${esc(slot.end)} · ${Math.max(0,Number(slot.max||1)-taken)} place(s)</option>`}).join('')||'<option value="">Aucun créneau disponible</option>';
+}
+function cartView(){
+  const lines=Object.entries(cart).map(([id,qty])=>{const p=P.find(item=>item.id===id);if(!p)return '';const unit=Number(p.promoFc)>0&&p.promoEndsAt&&Number(p.promoEndsAt)>Date.now()?Number(p.promoFc):Number(p.fc);return `<div class="cart-line"><div><strong>${esc(p.name)}</strong><small>${fc(unit)} · ${availableQuantity(id)} disponible(s)</small></div><div class="qty-controls"><button type="button" data-cart-id="${esc(id)}" data-delta="-1" aria-label="Retirer un ${esc(p.name)}">−</button><span>${Number(qty)}</span><button type="button" data-cart-id="${esc(id)}" data-delta="1" aria-label="Ajouter un ${esc(p.name)}"${Number(qty)>=availableQuantity(id)?' disabled':''}>+</button></div></div>`}).filter(Boolean).join('');
+  const dates=dateChoices(),areas=shop.neighborhoods||[],phone=userProfile.phone||U?.phoneNumber||'';
+  ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="cart-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="cart-title">Votre panier</h2>${lines||'<p class="empty">Votre panier est vide. Ajoutez des articles du catalogue.</p>'}${lines?`<div class="admin-section"><h3>Finaliser la commande</h3><form id="checkout-form"><label for="customer-phone">Téléphone WhatsApp</label><input id="customer-phone" name="phone" type="tel" autocomplete="tel" value="${esc(phone)}" placeholder="+243…" required>
+<label for="delivery-type">Mode de réception</label><select id="delivery-type" name="deliveryType"><option value="retrait">Retrait gratuit au point relais</option><option value="livraison">Livraison</option></select><p class="mu" id="pickup-point">${esc(shop.pickupPoint||'Le point relais sera confirmé par la boutique.')}</p>
+<div id="delivery-fields" hidden><label for="delivery-area">Quartier</label><select id="delivery-area" name="area"><option value="">Choisir un quartier</option>${areas.map(item=>`<option value="${esc(item.id)}">${esc(item.name)} — ${fc(item.fee)}</option>`).join('')}</select><p class="mu" id="delivery-fee-label">Choisissez votre quartier pour voir les frais.</p>
+<label for="delivery-address">Adresse de livraison</label><input id="delivery-address" name="address" autocomplete="street-address" placeholder="Avenue et numéro">
+<label for="delivery-landmark">Point de repère</label><input id="delivery-landmark" name="landmark" placeholder="Ex. près de…">
+<label for="delivery-map">Lien Google Maps (facultatif)</label><div style="display:flex;gap:8px"><input id="delivery-map" name="mapUrl" type="url" placeholder="https://maps.google.com/…"><button class="mini" type="button" id="share-location">Partager ma position</button></div>
+<label for="delivery-date">Jour souhaité</label><select id="delivery-date" name="date">${dates.map(item=>`<option value="${item.value}">${esc(item.label)}</option>`).join('')}</select>
+<label for="delivery-slot">Créneau</label><select id="delivery-slot" name="slot" required></select></div>
+<label for="promo-input">Code promo</label><div style="display:flex;gap:8px"><input id="promo-input" name="promo" maxlength="24" autocomplete="off" placeholder="Code promo"><button class="mini" type="button" id="apply-promo">Appliquer</button></div><p id="promo-status" class="mu" role="status" aria-live="polite"></p>
+${Number(shop.depositPercent||0)>0?`<label for="payment-provider">Opérateur de paiement pour l’acompte</label><select id="payment-provider" name="paymentProvider">${Object.entries(shop.paymentNumbers||{}).filter(([,number])=>number).map(([operator,number])=>`<option value="${esc(operator)}">${esc(operator)} · ${esc(number)}</option>`).join('')}</select>`:''}
+<div id="checkout-summary"></div><p class="mu">${Number(shop.depositPercent||0)>0?`L’acompte sera payé manuellement via l’opérateur choisi. La boutique vérifiera le paiement.`:'La boutique confirmera votre commande et le paiement sur WhatsApp.'}</p>
+<button class="btn" type="submit">Envoyer la commande sur WhatsApp</button></form></div>`:''}</section>`);
+  if(lines){
+    $('#delivery-type').onchange=updateCheckoutSummary;$('#delivery-area').onchange=updateCheckoutSummary;$('#delivery-date').onchange=renderSlotChoices;
+    $('#apply-promo').onclick=applyPromoCode;$('#checkout-form').onsubmit=submitCheckout;
+    $('#share-location').onclick=()=>{
+      if(!navigator.geolocation){alert('La géolocalisation n’est pas disponible sur cet appareil.');return}
+      navigator.geolocation.getCurrentPosition(position=>{$('#delivery-map').value=`https://maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`},error=>{console.warn('Géolocalisation refusée ou indisponible.',error);alert('Impossible d’obtenir votre position. Vérifiez les autorisations de localisation.')},{enableHighAccuracy:true,timeout:10000});
+    };
+    renderCartCount();updateCheckoutSummary();
+  }
+}
+function showCart(){cartView()}
+function renderOrders(){
+  const root=$('#my-orders');if(!root)return;
+  root.innerHTML=orders.length?orders.map(order=>`<article class="order-card"><div class="order-head"><h3>Commande ${esc(order.id.slice(0,8).toUpperCase())}</h3><span class="b">${esc(orderStatus(order))}</span></div><p class="order-meta">${new Date(timeMs(order.createdAt)||Date.now()).toLocaleString('fr-FR')} · ${esc(order.deliveryType==='livraison'?'Livraison':'Retrait')}${order.slotLabel?` · ${esc(order.slotLabel)}`:''}</p><ul class="order-lines">${(order.items||[]).map(item=>`<li>${esc(item.name)} × ${esc(item.qty)} — ${fc(Number(item.unitFc)*Number(item.qty))}</li>`).join('')}</ul><div class="checkout-total final"><span>Total commande</span><strong>${fc(order.totalFc)}</strong></div>${orderStatus(order)==='Expirée'?'<p class="mu">La réservation a expiré. Ajoutez de nouveau les articles au panier pour recommander.</p>':''}${order.status==='Payée'||order.status==='Livrée'?`<p>Code de livraison : <strong>${esc(order.deliveryCode||'')}</strong></p><button class="mini" type="button" data-receipt="${esc(order.id)}">Voir le reçu</button>`:''}</article>`).join(''):'<p class="empty">Aucune commande pour le moment.</p>';
+}
+function showOrders(){
+  ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="orders-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="orders-title">Mes commandes</h2><div id="my-orders"></div></section>`);
+  renderOrders();
 }
 const ov=h=>{if($('#ov').hidden)focusBeforeModal=document.activeElement;$('#ov').innerHTML=h;$('#ov').hidden=false;requestAnimationFrame(()=>$('#ov .x')?.focus())};
 const closeOv=()=>{$('#ov').hidden=true;$('#ov').innerHTML='';focusBeforeModal?.focus();focusBeforeModal=null};
@@ -303,26 +487,219 @@ async function generateProductDescription(button){
   }finally{button.disabled=false;button.textContent='✦ Générer une description avec Gemini'}
 }
 
+function settingLines(text){return text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>line.split('|').map(value=>value.trim()))}
+function renderAdminSettings(){
+  const form=$('#shop-settings-form');if(!form)return;
+  form.elements.pickupPoint.value=shop.pickupPoint||'';
+  form.elements.neighborhoods.value=(shop.neighborhoods||[]).map(item=>`${item.id}|${item.name}|${item.fee}`).join('\n');
+  form.elements.courierCosts.value=Object.entries(privateDelivery.courierCosts||{}).map(([id,cost])=>`${id}|${cost}`).join('\n');
+  form.elements.slots.value=(shop.slots||[]).map(item=>`${item.id}|${item.start}|${item.end}|${item.max}|${item.cutoff}`).join('\n');
+  form.elements.depositPercent.value=shop.depositPercent||0;
+  form.elements.airtel.value=shop.paymentNumbers?.airtel||'';
+  form.elements.mpesa.value=shop.paymentNumbers?.mpesa||'';
+  form.elements.orange.value=shop.paymentNumbers?.orange||'';
+}
+function renderAdminAnnouncements(){
+  const root=$('#admin-announcements');if(!root)return;
+  root.innerHTML=announcements.length?announcements.map(item=>`<div class="admin-row"><div class="admin-product"><strong>${esc(item.title)}</strong><small>${esc(item.type||'info')} · ${item.active?'Active':'Masquée'}</small></div><div class="admin-actions"><button class="mini" type="button" data-edit-announcement="${esc(item.id)}">Modifier</button><button class="mini" type="button" data-delete-announcement="${esc(item.id)}">Supprimer</button></div></div>`).join(''):'<p class="mu">Aucune annonce programmée.</p>';
+}
+function renderPromoAdminList(){
+  const root=$('#admin-promo-list');if(!root)return;
+  root.innerHTML=promoCodes.length?promoCodes.map(item=>`<div class="admin-row"><div class="admin-product"><strong>${esc(item.code)}</strong><small>${item.kind==='percent'?`${esc(item.value)} %`:`${fc(item.value)}`} · ${Number(item.usedCount||0)}/${esc(item.usageLimit||0)} · ${item.active?'Actif':'Inactif'}</small></div><div class="admin-actions"><button class="mini" type="button" data-toggle-promo="${esc(item.id)}">${item.active?'Désactiver':'Activer'}</button><button class="mini" type="button" data-delete-promo="${esc(item.id)}">Supprimer</button></div></div>`).join(''):'<p class="mu">Aucun code promotionnel.</p>';
+}
+function secureDeliveryCode(){const values=new Uint32Array(1);crypto.getRandomValues(values);return String(values[0]%10000).padStart(4,'0')}
+async function markOrderPaid(orderId){
+  const code=secureDeliveryCode();
+  await runTransaction(db,async transaction=>{
+    const orderRef=doc(db,'orders',orderId),orderSnapshot=await transaction.get(orderRef);
+    if(!orderSnapshot.exists())throw new Error('Commande introuvable.');
+    const order=orderSnapshot.data();
+    if(order.status!=='Nouvelle'||timeMs(order.expiresAt)<=Date.now())throw new Error('Cette commande n’est plus réservable. Vérifiez le paiement et recréez la commande si nécessaire.');
+    const productRefs=order.items.map(item=>doc(db,'products',item.productId)),inventoryRefs=order.items.map(item=>doc(db,'inventory',item.productId));
+    const productSnapshots=await Promise.all(productRefs.map(ref=>transaction.get(ref))),inventorySnapshots=await Promise.all(inventoryRefs.map(ref=>transaction.get(ref))),privateSnapshot=await transaction.get(doc(db,'settings','deliveryPrivate'));
+    const reservationRefs=order.items.map(item=>doc(db,'reservations',`${orderId}_${item.productId}`)),reservationSnapshots=await Promise.all(reservationRefs.map(ref=>transaction.get(ref)));
+    const slotRef=doc(db,'slotReservations',orderId),slotSnapshot=order.slotKey?await transaction.get(slotRef):null;
+    for(let i=0;i<order.items.length;i++){
+      const item=order.items[i],product=productSnapshots[i],inventory=inventorySnapshots[i];
+      if(!product.exists()||!inventory.exists()||Number(product.data().qty)<Number(item.qty))throw new Error(`Stock insuffisant pour ${item.name}.`);
+    }
+    for(let i=0;i<order.items.length;i++){
+      const item=order.items[i],product=productSnapshots[i],inventory=inventorySnapshots[i];
+      transaction.update(productRefs[i],{qty:Number(product.data().qty)-Number(item.qty),updatedAt:Date.now()});
+      transaction.update(inventoryRefs[i],{reservedQty:Math.max(0,Number(inventory.data().reservedQty||0)-Number(item.qty)),[`holds.${orderId}`]:deleteField(),lastOrderId:orderId});
+      if(reservationSnapshots[i].exists())transaction.update(reservationRefs[i],{status:'Payée'});
+    }
+    if(slotSnapshot?.exists())transaction.update(slotRef,{status:'Payée'});
+    const courierCostFc=Number(privateSnapshot.data()?.courierCosts?.[order.areaId]||0);
+    transaction.set(doc(db,'orderFinance',orderId),{courierCostFc,marginFc:Number(order.deliveryFeeFc||0)-courierCostFc,recordedAt:serverTimestamp()});
+    transaction.update(orderRef,{status:'Payée',deliveryCode:code,paidAt:serverTimestamp()});
+  });
+  renderAdminOrders();
+}
+async function markOrderDelivered(orderId){
+  const order=orders.find(item=>item.id===orderId);if(!order)return;
+  const code=prompt(`Saisissez le code de livraison à 4 chiffres communiqué par le client pour la commande ${orderId.slice(0,8).toUpperCase()} :`);
+  if(code===null)return;
+  if(!/^\d{4}$/.test(code)||code!==order.deliveryCode){alert('Code de livraison incorrect.');return}
+  await updateDoc(doc(db,'orders',orderId),{status:'Livrée',deliveredAt:serverTimestamp()});
+  if(order.slotKey)await updateDoc(doc(db,'slotReservations',orderId),{status:'Livrée'});
+  renderAdminOrders();
+}
+function showReceipt(orderId){
+  const order=orders.find(item=>item.id===orderId);if(!order)return;
+  ov(`<section class="sheet pd receipt" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="receipt-title">Reçu LubuMarket</h2><p>Commande ${esc(order.id.slice(0,8).toUpperCase())} · ${esc(order.status)}</p><p>${new Date(timeMs(order.createdAt)||Date.now()).toLocaleString('fr-FR')}</p><ul class="order-lines">${(order.items||[]).map(item=>`<li>${esc(item.name)} × ${esc(item.qty)} — ${fc(Number(item.unitFc)*Number(item.qty))}</li>`).join('')}</ul><div class="checkout-total"><span>Sous-total</span><strong>${fc(order.subtotalFc)}</strong></div><div class="checkout-total"><span>Livraison</span><strong>${fc(order.deliveryFeeFc)}</strong></div>${order.discountFc?`<div class="checkout-total"><span>Réduction</span><strong>− ${fc(order.discountFc)}</strong></div>`:''}<div class="checkout-total final"><span>Total</span><strong>${fc(order.totalFc)}</strong></div><p>Statut : ${esc(order.status)}</p>${order.deliveryCode?`<p>Code de livraison : <strong>${esc(order.deliveryCode)}</strong></p>`:''}<button class="btn" type="button" data-print-receipt>Imprimer / enregistrer le reçu</button></section>`);
+}
+function orderStatus(order){
+  if(order.status==='Nouvelle'&&Number(order.expiresAt?.toMillis?.()||order.expiresAt||0)<=Date.now())return 'Expirée';
+  return order.status||'Nouvelle';
+}
+function renderAdminOrders(){
+  const root=$('#admin-orders');if(!root)return;
+  const statusFilter=$('#order-filter-status')?.value||'',areaFilter=$('#order-filter-area')?.value||'',slotFilter=$('#order-filter-slot')?.value||'';
+  const areaName=id=>shop.neighborhoods.find(item=>item.id===id)?.name||id||'';
+  const visible=orders.filter(order=>(!statusFilter||orderStatus(order)===statusFilter)&&(!areaFilter||order.areaId===areaFilter)&&(!slotFilter||order.deliveryDate===slotFilter));
+  root.innerHTML=visible.length?visible.map(order=>{
+    const status=orderStatus(order),finance=orderFinance.find(item=>item.id===order.id),cost=Number(finance?.courierCostFc??privateDelivery.courierCosts?.[order.areaId]??0),margin=Number(finance?.marginFc??(Number(order.deliveryFeeFc||0)-cost));
+    const items=(order.items||[]).map(item=>`<li>${esc(item.name)} × ${esc(item.qty)} — ${fc(Number(item.unitFc)*Number(item.qty))}</li>`).join('');
+    const wa=`https://wa.me/${String(order.phone||'').replace(/\D/g,'')}?text=${encodeURIComponent(`Bonjour, concernant votre commande ${order.id.slice(0,8).toUpperCase()} LubuMarket.`)}`;
+    return `<article class="order-card"><div class="order-head"><h3>Commande ${esc(order.id.slice(0,8).toUpperCase())}</h3><span class="b">${esc(status)}</span></div><p class="order-meta">${esc(order.phone||'')} · ${esc(areaName(order.areaId))}${order.deliveryDate?` · ${esc(order.deliveryDate)} ${esc(order.slotLabel||'')}`:''}</p><ul class="order-lines">${items}</ul><div class="checkout-total"><span>Total · acompte ${fc(order.depositFc||0)}</span><strong>${fc(order.totalFc)}</strong></div>${order.deliveryType==='livraison'?`<p class="order-meta">Frais client ${fc(order.deliveryFeeFc||0)} · coût coursier ${finance?'enregistré':'estimé'} ${fc(cost)} · marge ${finance?'enregistrée':'estimée'} ${fc(margin)}</p>`:''}${order.address?`<p class="order-meta">${esc(order.address)}${order.landmark?` · Repère : ${esc(order.landmark)}`:''}</p>`:''}<div class="order-actions"><a class="mini" href="tel:${esc(order.phone||'')}">Appeler</a><a class="mini" href="${wa}" target="_blank" rel="noopener">WhatsApp</a>${order.mapUrl?`<a class="mini" href="${esc(order.mapUrl)}" target="_blank" rel="noopener">Maps</a>`:''}${status==='Nouvelle'?`<button class="mini" type="button" data-paid="${esc(order.id)}">Payée</button><button class="mini" type="button" data-remind="${esc(order.id)}">Relancer</button>`:''}${status==='Payée'?`<button class="mini" type="button" data-delivered="${esc(order.id)}">Livrée (code)</button>`:''}</div></article>`;
+  }).join(''):'<p class="empty">Aucune commande pour ce filtre.</p>';
+}
+async function ensureInventoryDocs(){
+  if(!isOwner)return;
+  try{
+    const current=await getDocs(collection(db,'inventory')),existing=new Set(current.docs.map(item=>item.id)),missing=P.filter(item=>!existing.has(item.id));
+    for(let start=0;start<missing.length;start+=400){
+      const batch=writeBatch(db);
+      missing.slice(start,start+400).forEach(item=>batch.set(doc(db,'inventory',item.id),{reservedQty:0,holds:{}}));
+      await batch.commit();
+    }
+  }catch(error){console.error('Impossible d’initialiser les réservations de stock.',error);setNotice('Les réservations ne sont pas initialisées pour tous les articles. Vérifiez les règles Firestore.',true)}
+}
+function editAnnouncement(id){
+  const item=announcements.find(value=>value.id===id),form=$('#announcement-form');if(!item||!form)return;
+  form.elements.announcementId.value=item.id;form.elements.type.value=item.type||'info';form.elements.title.value=item.title||'';form.elements.message.value=item.message||'';form.elements.imageUrl.value=item.imageUrl||'';form.elements.targetType.value=item.targetType||'';form.elements.target.value=item.target||'';form.elements.buttonLabel.value=item.buttonLabel||'';form.elements.active.checked=!!item.active;
+  form.elements.startsAt.value=item.startsAt?new Date(Number(item.startsAt)).toISOString().slice(0,16):'';form.elements.endsAt.value=item.endsAt?new Date(Number(item.endsAt)).toISOString().slice(0,16):'';
+  form.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function resetAnnouncementForm(){const form=$('#announcement-form');if(!form)return;form.reset();form.elements.announcementId.value='';form.elements.active.checked=true}
+async function applyPromoCode(){
+  const status=$('#promo-status'),code=$('#promo-input')?.value.trim().toUpperCase();
+  if(!code){cartPromo=null;status.textContent='Saisissez un code promo.';updateCheckoutSummary();return}
+  try{
+    const snapshot=await getDoc(doc(db,'promoCodes',code));
+    if(!snapshot.exists())throw new Error('Ce code n’existe pas.');
+    const promo=snapshot.data(),expiry=timeMs(promo.expiresAt);
+    if(!promo.active||expiry<=Date.now())throw new Error('Ce code est expiré ou désactivé.');
+    if(Number(promo.usedCount||0)>=Number(promo.usageLimit||0))throw new Error('Ce code a atteint sa limite d’utilisation.');
+    const subtotal=cartSubtotal(),discount=Math.min(subtotal,promo.kind==='percent'?Math.round(subtotal*Number(promo.value)/100):Number(promo.value));
+    if(discount<=0)throw new Error('Ce code ne peut pas être appliqué à ce panier.');
+    cartPromo={code,discount,kind:promo.kind,value:Number(promo.value)};status.textContent=`Code appliqué : − ${fc(discount)}.`;updateCheckoutSummary();
+  }catch(error){cartPromo=null;status.textContent=error.message||'Impossible de vérifier ce code promo.';updateCheckoutSummary()}
+}
+function createOrderMessage(order){
+  const lines=order.items.map(item=>`• ${item.name} × ${item.qty}: ${fc(item.unitFc*item.qty)}`).join('\n');
+  return `Bonjour LubuMarket, voici ma commande ${order.id.slice(0,8).toUpperCase()}.\n${lines}\nSous-total: ${fc(order.subtotalFc)}\nLivraison: ${fc(order.deliveryFeeFc)}\n${order.promoCode?`Promo ${order.promoCode}: −${fc(order.discountFc)}\n`:''}TOTAL: ${fc(order.totalFc)}\nAcompte: ${fc(order.depositFc)}${order.paymentNumber?`\nPaiement ${order.paymentProvider}: ${order.paymentNumber}`:''}\nMode: ${order.deliveryType==='livraison'?'Livraison':'Retrait gratuit'}${order.deliveryDate?`\nCréneau: ${order.deliveryDate} ${order.slotLabel}`:''}${order.address?`\nAdresse: ${order.address}\nRepère: ${order.landmark||'—'}`:''}${order.mapUrl?`\nPosition: ${order.mapUrl}`:''}`;
+}
+async function submitCheckout(event){
+  event.preventDefault();if(!U){alert('Connectez-vous avant de commander.');return}
+  const form=event.target,fd=new FormData(form),button=form.querySelector('button[type="submit"]'),deliveryType=String(fd.get('deliveryType')),phone=String(fd.get('phone')||'').trim();
+  if(!phone){alert('Indiquez un numéro de téléphone.');return}
+  const cartItems=Object.entries(cart).map(([id,qty])=>{const product=P.find(item=>item.id===id);const unitFc=product&&Number(product.promoFc)>0&&product.promoEndsAt&&Number(product.promoEndsAt)>Date.now()?Number(product.promoFc):Number(product?.fc||0);return product?{productId:id,name:product.name,qty:Number(qty),unitFc}:null}).filter(Boolean);
+  if(!cartItems.length){alert('Votre panier est vide.');return}
+  for(const item of cartItems)if(item.qty>availableQuantity(item.productId)){alert(`Le stock de ${item.name} vient de changer. Mettez votre panier à jour.`);showCart();return}
+  const area=shop.neighborhoods.find(item=>item.id===fd.get('area'));
+  if(deliveryType==='livraison'&&(!area||!fd.get('address')||!fd.get('landmark'))){alert('Pour la livraison, indiquez le quartier, l’adresse et un point de repère.');return}
+  const mapUrl=String(fd.get('mapUrl')||'').trim();if(mapUrl){try{if(new URL(mapUrl).protocol!=='https:')throw new Error()}catch{alert('Le lien de position doit être une adresse HTTPS valide.');return}}
+  const deliveryDate=deliveryType==='livraison'?String(fd.get('date')||''):'';const slot=deliveryType==='livraison'?(slotsForShop().find(item=>item.id===fd.get('slot'))||null):null;
+  if(deliveryType==='livraison'&&!slot){alert('Aucun créneau de livraison disponible. Contactez la boutique.');return}
+  const slotKey=slot?`${deliveryDate}_${slot.id}`:'';
+  if(slot&&slotBookings.filter(item=>item.slotKey===slotKey&&(item.status==='Payée'||(item.status==='Nouvelle'&&Number(item.expiresAt?.toMillis?.()||item.expiresAt||0)>Date.now()))).length>=Number(slot.max||10)){alert('Ce créneau vient d’être complet. Choisissez-en un autre.');renderSlotChoices();return}
+  const subtotalFc=cartItems.reduce((sum,item)=>sum+item.unitFc*item.qty,0),deliveryFeeFc=deliveryType==='livraison'?Number(area.fee):0;
+  let discountFc=cartPromo?.discount||0,promoRef=null,promoData=null;
+  if(cartPromo){promoRef=doc(db,'promoCodes',cartPromo.code);const snap=await getDoc(promoRef);if(!snap.exists()){alert('Le code promo n’est plus disponible.');cartPromo=null;return}promoData=snap.data();if(!promoData.active||timeMs(promoData.expiresAt)<=Date.now()||Number(promoData.usedCount||0)>=Number(promoData.usageLimit||0)){alert('Le code promo vient d’expirer ou d’atteindre sa limite.');cartPromo=null;showCart();return}discountFc=Math.min(subtotalFc,promoData.kind==='percent'?Math.round(subtotalFc*Number(promoData.value)/100):Number(promoData.value))}
+  const totalFc=Math.max(0,subtotalFc+deliveryFeeFc-discountFc),depositFc=Math.round(totalFc*Number(shop.depositPercent||0)/100),paymentProvider=String(fd.get('paymentProvider')||''),paymentNumber=shop.paymentNumbers?.[paymentProvider]||'',now=Date.now(),expiresAt=Timestamp.fromMillis(now+30*60*1000),orderRef=doc(collection(db,'orders')),itemQuantities=Object.fromEntries(cartItems.map(item=>[item.productId,item.qty])),order={uid:U.uid,phone,items:cartItems,itemQuantities,subtotalFc,deliveryType,areaId:area?.id||'',areaName:area?.name||'',deliveryFeeFc,address:deliveryType==='livraison'?String(fd.get('address')||'').trim():'',landmark:deliveryType==='livraison'?String(fd.get('landmark')||'').trim():'',mapUrl:deliveryType==='livraison'?mapUrl:'',deliveryDate,slotId:slot?.id||'',slotLabel:slot?`${slot.start}–${slot.end}`:'',slotKey,promoCode:cartPromo?.code||'',discountFc,totalFc,depositFc,paymentProvider,paymentNumber,status:'Nouvelle',expiresAt,createdAt:serverTimestamp()};
+  if(depositFc>0&&!paymentNumber){alert('La boutique doit configurer un numéro de paiement avant de demander un acompte.');return}
+  button.disabled=true;button.textContent='Envoi de la commande…';
+  try{
+    await runTransaction(db,async transaction=>{
+      const productSnapshots=await Promise.all(cartItems.map(item=>transaction.get(doc(db,'products',item.productId))));
+      const inventorySnapshots=await Promise.all(cartItems.map(item=>transaction.get(doc(db,'inventory',item.productId))));
+      let promoSnapshot=null;if(promoRef)promoSnapshot=await transaction.get(promoRef);
+      const slotCounterRef=slot?doc(db,'slotCounters',slotKey):null,slotCounterSnapshot=slotCounterRef?await transaction.get(slotCounterRef):null;
+      for(let index=0;index<cartItems.length;index++){
+        const item=cartItems[index],product=productSnapshots[index],inventory=inventorySnapshots[index];
+        if(!product.exists()||!inventory.exists())throw new Error('Le stock de cet article n’est pas prêt pour la réservation.');
+        const data=product.data(),held=Number(inventory.data().reservedQty||0),validPromo=Number(data.promoFc)>0&&timeMs(data.promoEndsAt)>Date.now(),currentPrice=validPromo?Number(data.promoFc):Number(data.fc);
+        if(currentPrice!==item.unitFc)throw new Error(`Le prix de ${item.name} a changé. Vérifiez le panier puis recommencez.`);
+        if(Number(data.qty)-held<item.qty)throw new Error(`Stock insuffisant pour ${item.name}.`);
+      }
+      if(slot){
+        const count=Number(slotCounterSnapshot?.data()?.count||0);
+        if(count>=Number(slot.max||1))throw new Error('Ce créneau vient d’être complet. Choisissez-en un autre.');
+      }
+      for(let index=0;index<cartItems.length;index++){
+        const item=cartItems[index],inventory=inventorySnapshots[index],held=Number(inventory.data().reservedQty||0);
+        transaction.update(doc(db,'inventory',item.productId),{reservedQty:held+item.qty,[`holds.${orderRef.id}`]:item.qty,lastOrderId:orderRef.id});
+      }
+      if(promoRef){if(!promoSnapshot?.exists())throw new Error('Le code promo n’est plus disponible.');const data=promoSnapshot.data();if(!data.active||timeMs(data.expiresAt)<=Date.now()||Number(data.usedCount||0)>=Number(data.usageLimit||0))throw new Error('Le code promo vient d’expirer ou d’atteindre sa limite.');const expectedDiscount=Math.min(subtotalFc,data.kind==='percent'?Math.round(subtotalFc*Number(data.value)/100):Number(data.value));if(expectedDiscount!==discountFc)throw new Error('La réduction a changé. Vérifiez le panier puis recommencez.');transaction.update(promoRef,{usedCount:Number(data.usedCount||0)+1,lastOrderId:orderRef.id})}
+      transaction.set(orderRef,order);
+      cartItems.forEach(item=>transaction.set(doc(db,'reservations',`${orderRef.id}_${item.productId}`),{orderId:orderRef.id,productId:item.productId,qty:item.qty,status:'Nouvelle',expiresAt}));
+      if(slot){const currentHolds=slotCounterSnapshot?.data()?.holds||{};transaction.set(slotCounterRef,{count:Number(slotCounterSnapshot?.data()?.count||0)+1,holds:{...currentHolds,[orderRef.id]:true},lastOrderId:orderRef.id});transaction.set(doc(db,'slotReservations',orderRef.id),{orderId:orderRef.id,slotKey,status:'Nouvelle',expiresAt})}
+      if(cartPromo)transaction.set(doc(db,'promoRedemptions',orderRef.id),{uid:U.uid,code:cartPromo.code,orderId:orderRef.id,status:'Nouvelle',createdAt:serverTimestamp()});
+    });
+    await setDoc(doc(db,'users',U.uid),{phone},{merge:true});
+    const savedOrder={...order,id:orderRef.id};
+    cart={};cartPromo=null;saveCart();renderCartCount();
+    const whatsapp=WA?`https://wa.me/${WA}?text=${encodeURIComponent(createOrderMessage(savedOrder))}`:'';
+    ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="order-created-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="order-created-title">Commande envoyée</h2><p>Numéro de commande : <strong>${esc(orderRef.id.slice(0,8).toUpperCase())}</strong></p><p>Votre panier est réservé pendant 30 minutes. Envoyez le récapitulatif sur WhatsApp pour confirmer avec la boutique.</p><div class="checkout-total final"><span>Total</span><strong>${fc(totalFc)}</strong></div>${depositFc?`<p>Acompte demandé : <strong>${fc(depositFc)}</strong></p>`:''}<p class="mu">Vous pouvez retrouver cette commande dans « Mes commandes ».</p>${whatsapp?`<a class="btn wa" href="${whatsapp}" target="_blank" rel="noopener">Envoyer le récapitulatif WhatsApp</a>`:''}</section>`);
+  }catch(error){console.error('Impossible de créer la commande.',error);alert(error.message||'La commande n’a pas pu être créée. Vérifiez votre connexion et réessayez.')}
+  finally{if(button.isConnected){button.disabled=false;button.textContent='Envoyer la commande sur WhatsApp'}}
+}
+
 function detail(id){
   const p=P.find(x=>x.id===id);if(!p)return;
   const nm=((U&&U.displayName)||'').split(' ')[0];
   const msg=`Bonjour LubuMarket, ${nm?'c’est '+nm+'. ':''}Je suis intéressé(e) par : ${p.name} à ${fc(p.fc)}. Est-il toujours disponible ?`;
   const wa=WA?`https://wa.me/${esc(WA)}?text=${encodeURIComponent(msg)}`:'';
   const sh=`https://wa.me/?text=${encodeURIComponent(p.name+' – '+fc(p.fc)+' '+location.origin)}`;
-  const im=p.imgs||[];
-  ov(`<section class="sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button>${im.length?`<div class="gal" aria-label="Photos de ${esc(p.name)}">${im.map((u,i)=>`<img src="${esc(u)}" alt="${esc(p.name)} — photo ${i+1}" loading="${i?'lazy':'eager'}" decoding="async">`).join('')}</div>`:''}<div class="pd"><span class="b">${esc(p.etat||'Article')} · ${Number(p.qty)>0?'En stock':'Disponibilité à confirmer'}</span><h2 id="product-title">${esc(p.name)}</h2><div class="pr" style="font-size:22px">${fc(p.fc)}</div>${p.usd?`<div class="mu">≈ ${esc(p.usd)} $</div>`:''}<p>${esc(p.desc||'Contactez la boutique pour en savoir plus sur cet article.')}</p>${wa?`<a class="btn wa" href="${wa}" target="_blank" rel="noopener">Commander via WhatsApp</a>`:'<p class="mu">Le contact WhatsApp arrive bientôt.</p>'}<a class="btn o" href="${sh}" target="_blank" rel="noopener">Partager cet article</a></div></section>`);
+  const im=p.imgs||[],specs=Object.entries(p.specs||{}).filter(([,value])=>String(value).trim());
+  ov(`<section class="sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button>${im.length?`<div class="gal" aria-label="Photos de ${esc(p.name)}">${im.map((u,i)=>`<img src="${esc(u)}" alt="${esc(p.name)} — photo ${i+1}" loading="${i?'lazy':'eager'}" decoding="async">`).join('')}</div>`:''}<div class="pd"><span class="b">${esc(p.etat||'Article')} · ${availableQuantity(p.id)>0?'En stock':'Épuisé'}</span><h2 id="product-title">${esc(p.name)}</h2><div class="pr" style="font-size:22px">${fc(p.promoFc&&p.promoEndsAt>Date.now()?p.promoFc:p.fc)}</div>${p.usd?`<div class="mu">≈ ${esc(p.usd)} $</div>`:''}<p>${esc(p.desc||'Contactez la boutique pour en savoir plus sur cet article.')}</p>${specs.length?`<table class="characteristics"><caption class="sr">Caractéristiques de ${esc(p.name)}</caption><tbody>${specs.map(([key,value])=>`<tr><th scope="row">${esc(key)}</th><td>${esc(value)}</td></tr>`).join('')}</tbody></table>`:''}<button class="btn" type="button" data-add="${esc(p.id)}"${availableQuantity(p.id)<1?' disabled':''}>Ajouter au panier</button>${wa?`<a class="btn wa" href="${wa}" target="_blank" rel="noopener">Commander via WhatsApp</a>`:''}<a class="btn o" href="${sh}" target="_blank" rel="noopener">Partager cet article</a></div></section>`);
 }
 function admin(editId=null){
   if(!isOwner)return;
   const product=editId?P.find(item=>item.id===editId):null;
   if(editId&&!product){alert('Cet article n’existe plus dans le catalogue.');return}
   ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="admin-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="admin-title">Espace gérant</h2>
-<section class="admin-note"><h3>Annonce du jour</h3><p class="mu">Publiez une promo, une nouveauté ou un nouvel arrivage sur l’accueil. Modifiez ou désactivez l’annonce quand vous le souhaitez.</p>
-<form id="announcement-form"><label for="announcement-type">Type d’annonce</label><select id="announcement-type" name="type"><option value="promo"${announcement.type==='promo'?' selected':''}>Promotion</option><option value="nouveaute"${announcement.type==='nouveaute'?' selected':''}>Nouveauté</option><option value="arrivage"${announcement.type==='arrivage'?' selected':''}>Nouvel arrivage</option><option value="info"${announcement.type==='info'?' selected':''}>Information</option></select>
-<label for="announcement-title">Titre</label><input id="announcement-title" name="title" maxlength="70" value="${esc(announcement.title||'')}" placeholder="Ex. Offre spéciale cette semaine" required>
-<label for="announcement-message">Message</label><textarea id="announcement-message" name="message" rows="3" maxlength="240" placeholder="Indiquez les détails que les clients doivent connaître." required>${esc(announcement.message||'')}</textarea>
-<label class="toggle-line" for="announcement-active"><input id="announcement-active" name="active" type="checkbox"${announcement.active?' checked':''}> Afficher cette annonce sur l’accueil</label>
-<button class="btn" type="submit" style="margin-top:12px">Enregistrer l’annonce</button><p id="announcement-save-status" class="mu" role="status" aria-live="polite"></p></form></section>
+<section class="admin-section"><h3>Livraison, créneaux et acompte</h3><form id="shop-settings-form">
+<label for="pickup-point-setting">Point relais gratuit</label><input id="pickup-point-setting" name="pickupPoint" maxlength="160" value="${esc(shop.pickupPoint||'')}" placeholder="Adresse du point relais">
+<label for="neighborhood-setting">Quartiers et prix client</label><textarea id="neighborhood-setting" name="neighborhoods" rows="4" placeholder="Commune|Quartier|Frais client en FC">${(shop.neighborhoods||[]).map(item=>`${item.id}|${item.name}|${item.fee}`).join('\n')}</textarea><p class="mu">Une ligne par zone : identifiant|quartier|tarif facturé au client. Les frais coursier restent dans le réglage privé ci-dessous.</p>
+<label for="courier-setting">Tarif coursier par zone (privé, gérant seulement)</label><textarea id="courier-setting" name="courierCosts" rows="3" placeholder="identifiant|coût coursier en FC">${Object.entries(privateDelivery.courierCosts||{}).map(([id,cost])=>`${id}|${cost}`).join('\n')}</textarea>
+<label for="slots-setting">Créneaux et capacité par jour</label><textarea id="slots-setting" name="slots" rows="4" placeholder="identifiant|début|fin|maximum|heure limite">${(shop.slots||[]).map(item=>`${item.id}|${item.start}|${item.end}|${item.max}|${item.cutoff}`).join('\n')}</textarea>
+<label for="deposit-setting">Acompte demandé (%)</label><input id="deposit-setting" name="depositPercent" type="number" min="0" max="100" step="1" value="${esc(shop.depositPercent||0)}">
+<label for="airtel-number">Airtel Money</label><input id="airtel-number" name="airtel" inputmode="tel" value="${esc(shop.paymentNumbers?.airtel||'')}" placeholder="Numéro de paiement">
+<label for="mpesa-number">M-Pesa</label><input id="mpesa-number" name="mpesa" inputmode="tel" value="${esc(shop.paymentNumbers?.mpesa||'')}" placeholder="Numéro de paiement">
+<label for="orange-number">Orange Money</label><input id="orange-number" name="orange" inputmode="tel" value="${esc(shop.paymentNumbers?.orange||'')}" placeholder="Numéro de paiement">
+<button class="btn" type="submit" style="margin-top:12px">Enregistrer les paramètres</button><p id="shop-settings-status" class="mu" role="status" aria-live="polite"></p></form></section>
+<section class="admin-section"><h3>Annonces d’accueil</h3><form id="announcement-form"><input type="hidden" name="announcementId">
+<label for="announcement-type">Type</label><select id="announcement-type" name="type"><option value="promo">Promotion</option><option value="nouveaute">Nouveauté</option><option value="arrivage">Nouvel arrivage</option><option value="info">Information</option></select>
+<label for="announcement-title">Titre</label><input id="announcement-title" name="title" maxlength="70" placeholder="Ex. Offre spéciale cette semaine" required>
+<label for="announcement-message">Message</label><textarea id="announcement-message" name="message" rows="3" maxlength="240" placeholder="Indiquez les détails que les clients doivent connaître." required></textarea>
+<label for="announcement-image">URL de l’image (facultatif)</label><input id="announcement-image" name="imageUrl" type="url" placeholder="https://…">
+<label for="announcement-target-type">Bouton de l’annonce (facultatif)</label><select id="announcement-target-type" name="targetType"><option value="">Aucun bouton</option><option value="product">Article (ID produit)</option><option value="category">Catégorie</option><option value="promo">Code promo</option></select>
+<label for="announcement-target">Article, catégorie ou code cible</label><input id="announcement-target" name="target" maxlength="120">
+<label for="announcement-button">Texte du bouton</label><input id="announcement-button" name="buttonLabel" maxlength="35" placeholder="Découvrir">
+<div class="order-form-grid"><div><label for="announcement-start">Début</label><input id="announcement-start" name="startsAt" type="datetime-local"></div><div><label for="announcement-end">Fin</label><input id="announcement-end" name="endsAt" type="datetime-local"></div></div>
+<label class="toggle-line" for="announcement-active"><input id="announcement-active" name="active" type="checkbox" checked> Activer cette annonce</label>
+<button class="btn" type="submit" style="margin-top:12px">Enregistrer l’annonce</button><button class="mini" type="button" data-reset-announcement>Effacer le formulaire</button><p id="announcement-save-status" class="mu" role="status" aria-live="polite"></p></form><div id="admin-announcements"></div></section>
+<section class="admin-section"><h3>Codes promotionnels</h3><form id="promo-form"><label for="promo-code-admin">Code</label><input id="promo-code-admin" name="code" maxlength="24" required>
+<label for="promo-kind-admin">Réduction</label><select id="promo-kind-admin" name="kind"><option value="percent">Pourcentage</option><option value="fixed">Montant en FC</option></select>
+<label for="promo-value-admin">Valeur</label><input id="promo-value-admin" name="value" type="number" min="1" required>
+<label for="promo-expiry-admin">Date de fin</label><input id="promo-expiry-admin" name="expiresAt" type="datetime-local" required>
+<label for="promo-limit-admin">Nombre maximum d’utilisations</label><input id="promo-limit-admin" name="usageLimit" type="number" min="1" value="10" required>
+<label class="toggle-line" for="promo-active-admin"><input id="promo-active-admin" name="active" type="checkbox" checked> Activer ce code</label>
+<button class="btn" type="submit" style="margin-top:12px">Créer le code promo</button><p id="promo-save-status" class="mu" role="status" aria-live="polite"></p></form><div id="admin-promo-list"></div></section>
+<section class="admin-section"><h3>Commandes</h3><div class="order-form-grid"><div><label for="order-filter-status">Statut</label><select id="order-filter-status"><option value="">Tous</option><option>Nouvelle</option><option>Payée</option><option>Livrée</option><option>Expirée</option><option>Annulée</option></select></div><div><label for="order-filter-area">Quartier</label><select id="order-filter-area"><option value="">Tous les quartiers</option>${(shop.neighborhoods||[]).map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}</select></div></div><label for="order-filter-slot">Créneau</label><input id="order-filter-slot" type="date"><div id="admin-orders"></div></section>
 <h3>${product?'Modifier un article':'Ajouter un article'}</h3>
 <form id="f"><input type="hidden" name="productId" value="${esc(product?.id||'')}">
 <label for="p-name">Nom de l’article</label><input id="p-name" name="name" maxlength="100" value="${esc(product?.name||'')}" required>
@@ -334,24 +711,41 @@ function admin(editId=null){
 <label for="p-qty">Quantité en stock</label><input id="p-qty" name="qty" type="number" min="1" step="1" value="${esc(product?.qty??1)}" required>
 <label for="p-desc">Description</label><textarea id="p-desc" name="desc" rows="3" maxlength="800" placeholder="Décrivez les caractéristiques confirmées de l’article.">${esc(product?.desc||'')}</textarea>
 <div class="ai-tools"><button class="btn secondary" type="button" data-ai-desc>✦ Générer une description avec Gemini</button><p class="notice" id="ai-info" role="status" aria-live="polite">La description générée est un brouillon : vérifiez son exactitude avant de l’enregistrer.</p></div>
+<label for="p-specs">Caractéristiques (une ligne : nom|valeur)</label><textarea id="p-specs" name="specs" rows="4" placeholder="Couleur|Noir&#10;Capacité|128 Go">${Object.entries(product?.specs||{}).map(([key,value])=>`${key}|${value}`).join('\n')}</textarea>
 <label for="p-ph">Photos (1 à 3)</label><input id="p-ph" name="ph" type="file" accept="image/*" multiple><p class="mu">${product?.imgs?.length?`${product.imgs.length} photo(s) conservée(s) si aucune nouvelle photo n’est choisie.`:'Choisissez jusqu’à 3 photos.'}</p>
 <button class="btn" id="pub" type="submit" style="margin-top:14px" disabled>${product?'Enregistrer les modifications':'Publier l’article'}</button>${product?'<button class="btn secondary" type="button" data-cancel-edit style="margin-top:8px">Annuler la modification</button>':''}</form>
 <h3>Gestion du stock (${P.length})</h3>${P.map(item=>`<div class="admin-row"><div class="admin-product"><strong>${esc(item.name)}</strong><small>${esc(item.qty)} en stock · ${fc(item.fc)}</small></div><div class="admin-actions"><button class="mini" type="button" data-edit="${esc(item.id)}" aria-label="Modifier ${esc(item.name)}">Modifier</button><button class="mini" type="button" data-sold="${esc(item.id)}" aria-label="Enregistrer une vente de ${esc(item.name)}">Vendu</button><button class="mini" type="button" data-del="${esc(item.id)}" aria-label="Supprimer ${esc(item.name)}">Supprimer</button></div></div>`).join('')||'<p class="mu">Aucun article dans le stock.</p>'}
 <h3>Numéro WhatsApp</h3><label for="wan">Numéro WhatsApp de la boutique</label><input id="wan" inputmode="numeric" placeholder="243XXXXXXXXX" value="${esc(WA)}"><button class="btn" type="button" data-wa style="margin-top:8px">Enregistrer le numéro</button></section>`);
   $('#p-fc').addEventListener('input',syncUsdPreview);
+  $('#order-filter-status').onchange=renderAdminOrders;$('#order-filter-area').onchange=renderAdminOrders;$('#order-filter-slot').onchange=renderAdminOrders;
+  renderAdminSettings();renderAdminAnnouncements();renderPromoAdminList();renderAdminOrders();renderOrders();
+  ensureInventoryDocs();
   loadExchangeRate();
 }
 const shrink=f=>new Promise((resolve,reject)=>{const i=new Image(),url=URL.createObjectURL(f),release=()=>URL.revokeObjectURL(url);i.onload=()=>{try{const s=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;const ctx=c.getContext('2d');if(!ctx)throw new Error('Canvas indisponible');ctx.drawImage(i,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',.72))}catch(error){reject(error)}finally{release()}};i.onerror=()=>{release();reject(new Error('Image illisible'))};i.src=url});
 
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-cat],[data-fav],[data-id],[data-close],[data-sold],[data-del],[data-edit],[data-cancel-edit],[data-rate-refresh],[data-ai-desc],[data-wa],#adm,#me');
+  const t=e.target.closest('[data-cat],[data-fav],[data-id],[data-add],[data-cart-id],[data-close],[data-sold],[data-del],[data-edit],[data-cancel-edit],[data-rate-refresh],[data-ai-desc],[data-wa],[data-paid],[data-delivered],[data-remind],[data-receipt],[data-print-receipt],[data-edit-announcement],[data-delete-announcement],[data-reset-announcement],[data-toggle-promo],[data-delete-promo],[data-announcement-type],[data-announcement-target],#adm,#me,#open-cart,#open-orders');
   if(!t){if(e.target.id==='ov')closeOv();return}
   const d=t.dataset;
   try{
     if(d.fav){e.stopPropagation();await setDoc(doc(db,'users',U.uid),{favs:favs.includes(d.fav)?arrayRemove(d.fav):arrayUnion(d.fav)},{merge:true});return}
     if(d.cat){st.cat=d.cat;renderList();return}
+    if(d.add){e.stopPropagation();adjustCart(d.add,1);return}
+    if(d.cartId){adjustCart(d.cartId,Number(d.delta));return}
     if(d.id){detail(d.id);return}
     if('close' in d){closeOv();return}
+    if(t.id==='open-cart'){showCart();return}
+    if(t.id==='open-orders'){showOrders();return}
+    if(d.receipt){showReceipt(d.receipt);return}
+    if('printReceipt' in d){window.print();return}
+    if(d.announcementTarget){
+      e.preventDefault();
+      if(d.announcementType==='product'){closeOv();detail(d.announcementTarget)}
+      else if(d.announcementType==='category'){closeOv();st.cat=d.announcementTarget;renderList();$('#catalog-title').scrollIntoView({behavior:'smooth'})}
+      else if(d.announcementType==='promo'){closeOv();if(!cartQuantity()){setNotice('Ajoutez un article au panier pour appliquer ce code promo.');$('#catalog-title').scrollIntoView({behavior:'smooth'})}else{showCart();$('#promo-input').value=d.announcementTarget;await applyPromoCode()}}
+      return;
+    }
     if(t.id==='adm'){admin();return}
     if(t.id==='me'){if(confirm('Se déconnecter ?'))signOut(auth);return}
     if(d.aiDesc){await generateProductDescription(t);return}
@@ -359,10 +753,18 @@ document.addEventListener('click',async e=>{
     if('rateRefresh' in d){await loadExchangeRate();return}
     if('cancelEdit' in d){admin();return}
     if(d.edit){admin(d.edit);return}
-    if(d.sold){const p=P.find(x=>x.id===d.sold);if(p){if(p.qty>1){await updateDoc(doc(db,'products',p.id),{qty:p.qty-1});P=P.map(item=>item.id===p.id?{...item,qty:p.qty-1}:item)}else{await deleteDoc(doc(db,'products',p.id));P=P.filter(item=>item.id!==p.id)}}admin();return}
-    if(d.del){const p=P.find(x=>x.id===d.del);if(p&&confirm(`Supprimer définitivement « ${p.name} » ?`)){await deleteDoc(doc(db,'products',d.del));P=P.filter(item=>item.id!==d.del);admin()}return}
-    if('wa' in d){await setDoc(doc(db,'settings','shop'),{whatsapp:($('#wan').value||'').replace(/\D/g,'')});closeOv()}
-  }catch(err){alert('Action refusée ou connexion perdue. Réessayez.')}
+    if('resetAnnouncement' in d){resetAnnouncementForm();return}
+    if(d.editAnnouncement){editAnnouncement(d.editAnnouncement);return}
+    if(d.deleteAnnouncement){const item=announcements.find(value=>value.id===d.deleteAnnouncement);if(item&&confirm(`Supprimer l’annonce « ${item.title} » ?`)){await deleteDoc(doc(db,'announcements',item.id));if($('#announcement-form')?.elements.announcementId.value===item.id)resetAnnouncementForm()}return}
+    if(d.togglePromo){const promo=promoCodes.find(value=>value.id===d.togglePromo);if(promo)await updateDoc(doc(db,'promoCodes',promo.id),{active:!promo.active});return}
+    if(d.deletePromo){const promo=promoCodes.find(value=>value.id===d.deletePromo);if(promo&&confirm(`Supprimer le code ${promo.code} ?`))await deleteDoc(doc(db,'promoCodes',promo.id));return}
+    if(d.paid){if(confirm('Confirmer que le paiement a été vérifié ? Le stock sera décrémenté.'))await markOrderPaid(d.paid);return}
+    if(d.delivered){await markOrderDelivered(d.delivered);return}
+    if(d.remind){const order=orders.find(item=>item.id===d.remind);if(order){const number=String(order.phone||'').replace(/\D/g,'');window.open(`https://wa.me/${number}?text=${encodeURIComponent(`Bonjour, votre réservation LubuMarket ${order.id.slice(0,8).toUpperCase()} expire bientôt. Confirmez votre paiement pour maintenir la commande.`)}`,'_blank','noopener')}return}
+    if(d.sold){const p=P.find(x=>x.id===d.sold);if(p){await runTransaction(db,async transaction=>{const productRef=doc(db,'products',p.id),inventoryRef=doc(db,'inventory',p.id),product=await transaction.get(productRef),inventory=await transaction.get(inventoryRef);if(!product.exists()||!inventory.exists())throw new Error('Stock non initialisé.');if(Number(product.data().qty)-Number(inventory.data().reservedQty||0)<1)throw new Error('Aucun article disponible hors réservation.');transaction.update(productRef,{qty:Number(product.data().qty)-1,updatedAt:Date.now()})})}admin();return}
+    if(d.del){const p=P.find(x=>x.id===d.del);if(p&&confirm(`Supprimer définitivement « ${p.name} » ?`)){const inventory=await getDoc(doc(db,'inventory',p.id));if(Number(inventory.data()?.reservedQty||0)>0)throw new Error('Cet article est réservé par une commande. Attendez l’expiration ou traitez la commande avant la suppression.');await deleteDoc(doc(db,'products',d.del));if(inventory.exists())await deleteDoc(doc(db,'inventory',p.id));P=P.filter(item=>item.id!==d.del);admin()}return}
+    if('wa' in d){await setDoc(doc(db,'settings','shop'),{whatsapp:($('#wan').value||'').replace(/\D/g,'')},{merge:true});closeOv()}
+  }catch(err){console.error('Action impossible.',err);alert(err.message||'Action refusée ou connexion perdue. Réessayez.')}
 });
 document.addEventListener('keydown',e=>{
   if($('#ov').hidden)return;
@@ -375,31 +777,79 @@ document.addEventListener('keydown',e=>{
   else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
 });
 document.addEventListener('submit',async e=>{
-  if(e.target.id==='announcement-form'){
+  const form=e.target;
+  if(form.id==='checkout-form'){await submitCheckout(e);return}
+  if(form.id==='shop-settings-form'){
     e.preventDefault();if(!isOwner)return;
-    const form=e.target,fd=new FormData(form),button=form.querySelector('button[type="submit"]'),status=$('#announcement-save-status'),title=String(fd.get('title')||'').trim(),message=String(fd.get('message')||'').trim();
+    const fd=new FormData(form),button=form.querySelector('button[type="submit"]'),status=$('#shop-settings-status');
+    try{
+      const neighborhoods=settingLines(String(fd.get('neighborhoods')||'')).map(([id,name,fee])=>({id:id?.toLowerCase().replace(/[^a-z0-9_-]/g,'-'),name,fee:Number(fee)}));
+      if(neighborhoods.some(item=>!item.id||!item.name||!Number.isInteger(item.fee)||item.fee<0)||new Set(neighborhoods.map(item=>item.id)).size!==neighborhoods.length)throw new Error('Chaque quartier doit avoir un identifiant unique, un nom et un tarif entier positif ou nul.');
+      const courierCosts={};for(const [id,value] of settingLines(String(fd.get('courierCosts')||''))){const cost=Number(value);if(!id||!Number.isInteger(cost)||cost<0)throw new Error('Vérifiez les tarifs coursier privés entiers (identifiant|coût).');courierCosts[id.toLowerCase()]=cost}
+      const slots=settingLines(String(fd.get('slots')||'')).map(([id,start,end,max,cutoff])=>({id:id?.toLowerCase().replace(/[^a-z0-9_-]/g,'-'),start,end,max:Number(max),cutoff}));
+      if(!slots.length)throw new Error('Configurez au moins un créneau de livraison.');
+      if(slots.some(item=>!item.id||!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.start)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.end)||!Number.isInteger(item.max)||item.max<1||!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.cutoff||''))||new Set(slots.map(item=>item.id)).size!==slots.length)throw new Error('Créneau invalide. Format : identifiant|HH:MM|HH:MM|capacité|heure limite.');
+      if(Object.keys(courierCosts).some(id=>!neighborhoods.some(area=>area.id===id)))throw new Error('Chaque coût coursier doit correspondre à un quartier configuré.');
+      const depositPercent=Number(fd.get('depositPercent'));if(!Number.isInteger(depositPercent)||depositPercent<0||depositPercent>100)throw new Error('Le pourcentage d’acompte doit être entre 0 et 100.');
+      button.disabled=true;button.textContent='Enregistrement…';status.textContent='';
+      const paymentNumbers={airtel:String(fd.get('airtel')||'').replace(/\D/g,''),mpesa:String(fd.get('mpesa')||'').replace(/\D/g,''),orange:String(fd.get('orange')||'').replace(/\D/g,'')};
+      const slotMaxima=Object.fromEntries(slots.map(item=>[item.id,item.max]));
+      await Promise.all([setDoc(doc(db,'settings','shop'),{pickupPoint:String(fd.get('pickupPoint')||'').trim(),neighborhoods,slots,slotMaxima,depositPercent,paymentNumbers},{merge:true}),setDoc(doc(db,'settings','deliveryPrivate'),{courierCosts},{merge:true})]);
+      status.textContent='Paramètres de livraison et de paiement enregistrés.';
+    }catch(error){console.error('Impossible d’enregistrer les paramètres de livraison.',error);status.textContent=error.message||'Enregistrement impossible. Vérifiez votre connexion.'}
+    finally{button.disabled=false;button.textContent='Enregistrer les paramètres'}
+    return;
+  }
+  if(form.id==='announcement-form'){
+    e.preventDefault();if(!isOwner)return;
+    const fd=new FormData(form),button=form.querySelector('button[type="submit"]'),status=$('#announcement-save-status'),title=String(fd.get('title')||'').trim(),message=String(fd.get('message')||'').trim(),id=String(fd.get('announcementId')||'');
     if(!title||!message){status.textContent='Ajoutez un titre et un message avant d’enregistrer.';return}
+    const startsAt=fd.get('startsAt')?new Date(String(fd.get('startsAt'))).getTime():0,endsAt=fd.get('endsAt')?new Date(String(fd.get('endsAt'))).getTime():0;
+    if(startsAt&&endsAt&&startsAt>=endsAt){status.textContent='La date de fin doit être après la date de début.';return}
+    const imageUrl=String(fd.get('imageUrl')||'').trim();if(imageUrl){try{if(new URL(imageUrl).protocol!=='https:')throw new Error()}catch{status.textContent='L’image doit utiliser une adresse HTTPS valide.';return}}
+    const targetType=String(fd.get('targetType')||''),target=String(fd.get('target')||'').trim(),buttonLabel=String(fd.get('buttonLabel')||'').trim();
+    if((targetType||target||buttonLabel)&&(!targetType||!target||!buttonLabel)){status.textContent='Pour afficher un bouton, choisissez son type, sa cible et son texte.';return}
     button.disabled=true;button.textContent='Enregistrement…';status.textContent='';
     try{
-      announcement={type:fd.get('type'),title:title.slice(0,70),message:message.slice(0,240),active:fd.has('active'),updatedAt:Date.now()};
-      await setDoc(doc(db,'settings','shop'),{announcement},{merge:true});
-      renderAnnouncement(announcement);status.textContent=announcement.active?'Annonce publiée sur l’accueil.':'Annonce enregistrée et masquée de l’accueil.';
+      const data={type:fd.get('type'),title:title.slice(0,70),message:message.slice(0,240),imageUrl,targetType,target,buttonLabel,active:fd.has('active'),startsAt,endsAt,updatedAt:Date.now()};
+      if(id)await updateDoc(doc(db,'announcements',id),data);else await addDoc(collection(db,'announcements'),data);
+      resetAnnouncementForm();status.textContent='Annonce enregistrée.';
     }catch(error){console.error('Impossible d’enregistrer l’annonce.',error);status.textContent='Enregistrement impossible. Vérifiez votre connexion puis réessayez.'}
     finally{button.disabled=false;button.textContent='Enregistrer l’annonce'}
     return;
   }
-  if(e.target.id!=='f')return;e.preventDefault();if(!isOwner)return;
-  const f=e.target,fd=new FormData(f),btn=$('#pub');btn.disabled=true;btn.textContent='Publication…';
+  if(form.id==='promo-form'){
+    e.preventDefault();if(!isOwner)return;
+    const fd=new FormData(form),button=form.querySelector('button[type="submit"]'),status=$('#promo-save-status'),code=String(fd.get('code')||'').trim().toUpperCase().replace(/\s+/g,'');
+    if(!/^[A-Z0-9_-]{3,24}$/.test(code)){status.textContent='Le code doit contenir 3 à 24 lettres, chiffres, tirets ou underscores.';return}
+    const value=Number(fd.get('value')),usageLimit=Number(fd.get('usageLimit')),expiresAt=new Date(String(fd.get('expiresAt'))).getTime(),kind=String(fd.get('kind'));
+    if(!Number.isInteger(value)||value<1||(kind==='percent'&&value>100)||!Number.isInteger(usageLimit)||usageLimit<1||!Number.isFinite(expiresAt)||expiresAt<=Date.now()){status.textContent='Vérifiez la valeur entière, la limite d’utilisation et la date de fin.';return}
+    button.disabled=true;button.textContent='Création…';status.textContent='';
+    try{
+      const ref=doc(db,'promoCodes',code);if((await getDoc(ref)).exists())throw new Error('Ce code existe déjà. Choisissez un code unique.');
+      await setDoc(ref,{code,kind,value,usageLimit,usedCount:0,expiresAt:Timestamp.fromMillis(expiresAt),active:fd.has('active'),createdAt:Date.now()});
+      form.reset();form.elements.usageLimit.value=10;form.elements.active.checked=true;status.textContent=`Code ${code} créé.`;
+    }catch(error){console.error('Impossible de créer le code promo.',error);status.textContent=error.message||'Création impossible. Vérifiez les règles Firestore.'}
+    finally{button.disabled=false;button.textContent='Créer le code promo'}
+    return;
+  }
+  if(form.id!=='f')return;e.preventDefault();if(!isOwner)return;
+  const fd=new FormData(form),btn=$('#pub');btn.disabled=true;btn.textContent='Publication…';
   try{
-    const fcPrice=Number(fd.get('fc')),usdPrice=fcPrice/FX.rate;
+    const fcPrice=Number(fd.get('fc')),usdPrice=fcPrice/FX.rate,qty=Number(fd.get('qty'));
     if(!FX.fresh||FX.loading||!Number.isFinite(fcPrice)||fcPrice<0||!Number.isFinite(usdPrice))throw new Error('Un taux de change valide est nécessaire.');
-    const productId=String(fd.get('productId')||''),existing=P.find(item=>item.id===productId),files=[...f.elements.ph.files].slice(0,3),imgs=files.length?[]:[...(existing?.imgs||[])];
+    if(!Number.isInteger(qty)||qty<1)throw new Error('La quantité doit être un nombre entier positif.');
+    const productId=String(fd.get('productId')||''),existing=P.find(item=>item.id===productId),files=[...form.elements.ph.files].slice(0,3),imgs=files.length?[]:[...(existing?.imgs||[])];
     for(const file of files)imgs.push(await shrink(file));
-    const product={name:String(fd.get('name')||'').trim(),cat:fd.get('cat'),fc:fcPrice,usd:usdPrice.toFixed(2),usdRate:FX.rate,usdRateUpdatedAt:FX.updatedAt,etat:fd.get('etat'),qty:Number(fd.get('qty')),desc:fd.get('desc')||'',imgs,date:existing?.date||Date.now(),updatedAt:Date.now()};
-    if(productId)await updateDoc(doc(db,'products',productId),product);
-    else await addDoc(collection(db,'products'),product);
+    const specs={};for(const [key,value] of settingLines(String(fd.get('specs')||''))){if(key&&value)specs[key.slice(0,50)]=value.slice(0,120)}
+    const product={name:String(fd.get('name')||'').trim(),cat:fd.get('cat'),fc:fcPrice,usd:usdPrice.toFixed(2),usdRate:FX.rate,usdRateUpdatedAt:FX.updatedAt,etat:fd.get('etat'),qty,desc:String(fd.get('desc')||'').trim(),specs,imgs,date:existing?.date||Date.now(),updatedAt:Date.now()};
+    if(productId){
+      await runTransaction(db,async transaction=>{const productRef=doc(db,'products',productId),inventoryRef=doc(db,'inventory',productId),inventory=await transaction.get(inventoryRef);if(!inventory.exists())throw new Error('Réservation de stock non initialisée. Ouvrez à nouveau l’espace gérant.');if(qty<Number(inventory.data().reservedQty||0))throw new Error('La quantité ne peut pas être inférieure au stock actuellement réservé.');transaction.update(productRef,product)});
+    }else{
+      const productRef=doc(collection(db,'products')),inventoryRef=doc(db,'inventory',productRef.id),batch=writeBatch(db);batch.set(productRef,product);batch.set(inventoryRef,{reservedQty:0,holds:{}});await batch.commit();
+    }
     closeOv();
-  }catch(err){console.error('Impossible d’enregistrer cet article.',err);alert(err.message==='Un taux de change valide est nécessaire.'?'Le taux du jour n’est pas disponible. Réessayez avant d’enregistrer.':'Enregistrement impossible. Vérifiez les informations et votre connexion.');btn.disabled=false;btn.textContent=fd.get('productId')?'Enregistrer les modifications':'Publier l’article'}
+  }catch(err){console.error('Impossible d’enregistrer cet article.',err);alert(err.message||'Enregistrement impossible. Vérifiez les informations et votre connexion.');btn.disabled=false;btn.textContent=fd.get('productId')?'Enregistrer les modifications':'Publier l’article'}
 });
 $('#q').oninput=e=>{st.q=e.target.value;renderList()};
 $('#sort').onchange=e=>{st.sort=e.target.value;renderList()};
