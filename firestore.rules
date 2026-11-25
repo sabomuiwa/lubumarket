@@ -193,9 +193,12 @@ service cloud.firestore {
       allow read: if owner() || (signedIn() && request.auth.uid == userId);
       allow create, update: if signedIn()
         && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly(['name', 'email', 'favs', 'phone'])
+        && request.resource.data.keys().hasOnly(['name', 'email', 'favs', 'phone', 'addresses', 'language'])
         && (!('email' in request.resource.data) || request.resource.data.email == request.auth.token.email)
-        && (!('favs' in request.resource.data) || request.resource.data.favs is list);
+        && (!('favs' in request.resource.data) || request.resource.data.favs is list)
+        && (!('addresses' in request.resource.data)
+          || (request.resource.data.addresses is list && request.resource.data.addresses.size() <= 10))
+        && (!('language' in request.resource.data) || request.resource.data.language == 'fr');
       allow delete: if false;
     }
 
