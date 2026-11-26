@@ -172,6 +172,9 @@ label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 .account-address strong{display:block}.account-address p{margin:3px 0;color:var(--mut);font-size:13px}
 .account-address .admin-actions{margin-top:8px}
 .account-language{margin-top:16px}
+.account-policy-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+.account-policy-links .mini{min-height:44px}
+.policy-content{white-space:pre-wrap;line-height:1.65}
 .account-status{min-height:22px;margin:8px 0;color:var(--mut);font-size:13px}
 .card-actions{display:flex;gap:8px;margin-top:12px}
 .card-actions .mini{flex:1}
@@ -257,6 +260,7 @@ label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 <section class="hero" aria-labelledby="hero-title"><span class="eyebrow">Votre boutique à Lubumbashi</span><h1 id="hero-title">Les bonnes trouvailles, au bon endroit.</h1><p>Découvrez les articles disponibles en boutique et contactez-nous directement pour commander.</p><ul class="trust"><li>Stock consultable en direct</li><li>Commande simple sur WhatsApp</li><li>Prix affichés en francs congolais</li></ul></section>
 </section>
 <div class="notice" id="notice" role="status" aria-live="polite" hidden></div>
+<div class="notice" id="store-status" role="status" aria-live="polite" hidden></div>
 <section id="catalog-view" data-app-view="catalog" hidden>
 <label class="sr" for="q">Rechercher dans les articles</label>
 <div class="search"><input id="q" type="search" placeholder="Rechercher un article…" autocomplete="off"></div>
@@ -278,8 +282,8 @@ label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
-import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
-import {getFirestore,collection,doc,onSnapshot,addDoc,setDoc,deleteDoc,updateDoc,arrayUnion,arrayRemove,getDoc,getDocs,query,where,writeBatch,runTransaction,serverTimestamp,Timestamp,deleteField} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut,reauthenticateWithPopup,deleteUser} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+import {getFirestore,collection,collectionGroup,doc,onSnapshot,addDoc,setDoc,deleteDoc,updateDoc,arrayUnion,arrayRemove,getDoc,getDocs,query,where,writeBatch,runTransaction,serverTimestamp,Timestamp,deleteField} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 
 /* 1) Collez ici la configuration de votre application web Firebase */
 const firebaseConfig={apiKey:"AIzaSyAbx13iRKix9bBchIv5YK_sJXbUYYRJ8Yo",authDomain:"lubumarket-29a24.firebaseapp.com",projectId:"lubumarket-29a24",storageBucket:"lubumarket-29a24.firebasestorage.app",messagingSenderId:"1085554582697",appId:"1:1085554582697:web:dd305cfbc26240869c35b8"};
@@ -292,14 +296,37 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fc=n=>Number(n).toLocaleString('fr-FR')+' FC';
 const DEFAULT_SLOTS=[{id:'matin',start:'10:00',end:'12:00',max:10,cutoff:'08:00'},{id:'apres-midi',start:'16:00',end:'18:00',max:10,cutoff:'14:00'}];
-const SHOP_DEFAULTS={whatsapp:'',pickupPoint:'',neighborhoods:[],slots:DEFAULT_SLOTS,slotMaxima:{matin:10,'apres-midi':10},depositPercent:0,paymentNumbers:{},usdRate:0,lowStockThreshold:3,dropCampus:{},orderInstructions:'',announcement:{}};
-let U=null,isOwner=false,P=[],favs=[],WA='',announcement={},announcements=[],reservations=[],slotBookings=[],orders=[],orderFinance=[],shop={...SHOP_DEFAULTS},privateDelivery={},promoRedemptions=[],promoCodes=[],legacyPromoCodes=[],userProfile={},clientProfiles=[],pickupPoints=[],configuredSlots=[],unsub=[],focusBeforeModal=null,cart={},cartPromo=null,announcementTimer=null,expiryTimer=null,cartToastTimer=null;
+const WEEKDAYS=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const DEFAULT_OPENING_HOURS=Object.fromEntries(WEEKDAYS.map((_,day)=>[day,{enabled:true,open:'08:00',close:'20:00'}]));
+const POLICY_DEFAULTS={
+  conditions:'Les commandes sont enregistrées après validation par le client. La boutique confirme la disponibilité, le paiement et les modalités de retrait ou de livraison sur WhatsApp.',
+  returns:'Pour demander un retour ou signaler un problème, contactez la boutique sur WhatsApp en indiquant votre numéro de commande. Les demandes sont examinées par la boutique.',
+  privacy:'Les informations de compte et de commande servent à traiter les achats, les livraisons et le service client. Vous pouvez demander la suppression de votre compte; les commandes sont conservées sous forme anonymisée.'
+};
+const SHOP_DEFAULTS={whatsapp:'',pickupPoint:'',neighborhoods:[],slots:DEFAULT_SLOTS,slotMaxima:{matin:10,'apres-midi':10},depositPercent:0,paymentNumbers:{},usdRate:0,lowStockThreshold:3,dropCampus:{},orderInstructions:'',announcement:{},openingHours:DEFAULT_OPENING_HOURS,storeClosed:false,policies:POLICY_DEFAULTS};
+let U=null,isOwner=false,P=[],favs=[],WA='',announcement={},announcements=[],reservations=[],slotBookings=[],orders=[],orderFinance=[],shop={...SHOP_DEFAULTS},privateDelivery={},promoRedemptions=[],promoCodes=[],legacyPromoCodes=[],userProfile={},clientProfiles=[],pickupPoints=[],configuredSlots=[],pendingCarts=[],unsub=[],focusBeforeModal=null,cart={},cartPromo=null,announcementTimer=null,expiryTimer=null,cartToastTimer=null,cartCloudTimer=null,cartCloudReady=false,cartChangedBeforeCloudLoad=false,storeStatusTimer=null;
 const FX={rate:0,updatedAt:0,nextUpdate:0,fresh:false,loading:false,lastAttempt:0};
 const st={cat:'Tout',q:'',sort:'new',view:'home'};
 const setNotice=(message,error=false)=>{const el=$('#notice');el.textContent=message;el.classList.toggle('error',error);el.hidden=!message};
+function isStoreOpen(now=new Date()){
+  if(shop.storeClosed)return false;
+  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Kinshasa',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);
+  const values=Object.fromEntries(parts.filter(part=>part.type!=='literal').map(part=>[part.type,part.value]));
+  const day=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(values.weekday),hours=shop.openingHours?.[day]||DEFAULT_OPENING_HOURS[day];
+  if(day<0||!hours?.enabled)return false;
+  const current=Number(values.hour)*60+Number(values.minute),opening=Number(hours.open?.slice(0,2))*60+Number(hours.open?.slice(3,5)),closing=Number(hours.close?.slice(0,2))*60+Number(hours.close?.slice(3,5));
+  return Number.isFinite(opening)&&Number.isFinite(closing)&&current>=opening&&current<closing;
+}
+function renderStoreBanner(){
+  const banner=$('#store-status');if(!banner)return;
+  const open=isStoreOpen();banner.hidden=open;
+  if(!open)banner.textContent='Boutique fermée. Commandes traitées demain à 8h.';
+}
 const timeMs=value=>Number(value?.toMillis?.()??value??0);
 const expirationInFlight=new Set();
 const cartKey=()=>`lubumarket.cart.${U?.uid||'guest'}`;
+const accountDeletionKey=uid=>`lubumarket.account-deletion.${uid}`;
+const hasPendingAccountDeletion=uid=>{try{return localStorage.getItem(accountDeletionKey(uid))==='pending'}catch(error){console.warn('Impossible de vérifier une suppression de compte en attente.',error);return false}};
 const variantIdFor=(size,color)=>[size,color].map(value=>String(value||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')).filter(Boolean).join('-');
 const variantEntries=product=>(Array.isArray(product?.variants)?product.variants:Object.values(product?.variants||{})).map((item,index)=>({...item,id:item.id||variantIdFor(item.size,item.color)||`variant-${index+1}`}));
 const inventoryIdFor=(productId,variantId='')=>variantId?`${productId}--${variantId}`:productId;
@@ -308,7 +335,23 @@ const parseCartLine=key=>{const marker=key.indexOf('::');return marker<0?{produc
 const cartLineKey=(productId,variantId='')=>variantId?`${productId}::${variantId}`:productId;
 const createOrderNumber=()=>{const date=new Date(),parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Kinshasa',year:'2-digit',month:'2-digit',day:'2-digit'}).formatToParts(date).reduce((out,item)=>{if(item.type!=='literal')out[item.type]=item.value;return out},{});const aaMMjj=`${parts.year}${parts.month}${parts.day}`;const values=new Uint32Array(1);crypto.getRandomValues(values);return `LM-${aaMMjj}-${String(values[0]%10000).padStart(4,'0')}`};
 function loadCart(){try{const saved=JSON.parse(localStorage.getItem(cartKey())||'{}');cart=saved&&typeof saved==='object'?saved:{}}catch(error){console.warn('Le panier local est illisible.',error);cart={}}}
-function saveCart(){try{localStorage.setItem(cartKey(),JSON.stringify(cart))}catch(error){console.warn('Le panier ne peut pas être enregistré sur cet appareil.',error)}}
+function scheduleCartCloudSync(){
+  if(!U||!cartCloudReady)return;
+  clearTimeout(cartCloudTimer);
+  cartCloudTimer=setTimeout(async()=>{
+    if(!U||!cartCloudReady)return;
+    try{
+      const ref=doc(db,'users',U.uid,'cart','current');
+      if(cartQuantity())await setDoc(ref,{items:cart,updatedAt:serverTimestamp()});
+      else await deleteDoc(ref);
+    }catch(error){console.error('Impossible de synchroniser le panier.',error);setNotice('Le panier reste enregistré sur cet appareil, mais sa synchronisation est indisponible.',true)}
+  },350);
+}
+function saveCart(syncCloud=true){
+  try{localStorage.setItem(cartKey(),JSON.stringify(cart))}catch(error){console.warn('Le panier ne peut pas être enregistré sur cet appareil.',error)}
+  if(syncCloud&&U&&!cartCloudReady)cartChangedBeforeCloudLoad=true;
+  if(syncCloud)scheduleCartCloudSync();
+}
 function cartQuantity(){return Object.values(cart).reduce((sum,qty)=>sum+(Number(qty)||0),0)}
 function renderCartCount(){
   const badge=$('#cart-count'),count=String(cartQuantity());if(badge.textContent===count)return;
@@ -359,10 +402,12 @@ function avatarMarkup(size=''){
 function renderAccount(){
   const root=$('#account-view');if(!root||!U)return;
   const addresses=Array.isArray(userProfile.addresses)?userProfile.addresses:[];
-  root.innerHTML=`<section class="account" aria-labelledby="account-title"><div class="account-heading">${avatarMarkup('large')}<div><h1 id="account-title">${esc(U.displayName||'Mon compte')}</h1><p>${esc(U.email||'')}</p></div></div>
+  const pendingDeletion=hasPendingAccountDeletion(U.uid);
+  root.innerHTML=`<section class="account" aria-labelledby="account-title"><div class="account-heading">${avatarMarkup('large')}<div><h1 id="account-title">${esc(U.displayName||'Mon compte')}</h1><p>${esc(U.email||'')}</p>${pendingDeletion?'<p class="mu">Une suppression de compte est en attente. Relancez-la depuis le bouton ci-dessous.</p>':''}</div></div>
 <section class="admin-section"><h2>Mes informations</h2><form id="account-profile-form"><label for="account-phone">Téléphone</label><input id="account-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" value="${esc(userProfile.phone||U.phoneNumber||'')}" placeholder="+243…"><div class="account-language"><label for="account-language">Langue</label><select id="account-language" name="language"><option value="fr">Français</option></select></div><button class="btn" type="submit">Enregistrer mes informations</button></form></section>
 <section class="admin-section"><h2>Mes adresses</h2><div id="saved-addresses">${addresses.length?addresses.map((address,index)=>`<article class="account-address"><strong>${esc(address.neighborhood||'Quartier non précisé')}</strong><p>${esc(address.address||'')}${address.landmark?` · Repère : ${esc(address.landmark)}`:''}</p><div class="admin-actions"><button class="mini" type="button" data-address-edit="${index}">Modifier</button><button class="mini" type="button" data-address-delete="${index}">Supprimer</button></div></article>`).join(''):'<p class="mu">Aucune adresse enregistrée.</p>'}</div><form id="account-address-form"><input type="hidden" name="addressIndex" value=""><label for="address-neighborhood">Quartier</label><input id="address-neighborhood" name="neighborhood" maxlength="100" required><label for="address-line">Adresse</label><input id="address-line" name="address" maxlength="200" autocomplete="street-address" required><label for="address-landmark">Point de repère</label><input id="address-landmark" name="landmark" maxlength="160"><button class="btn" type="submit">Enregistrer cette adresse</button></form></section>
-<div class="account-actions"><button class="btn secondary" type="button" data-open-orders>Mes commandes</button><button class="btn secondary" type="button" data-view-tab="favorites">Favoris</button>${isOwner?'<button class="btn secondary" type="button" data-open-admin>Espace gérant</button>':''}<button class="btn secondary" type="button" data-logout>Se déconnecter</button></div><p class="account-status" id="account-status" role="status" aria-live="polite"></p></section>`;
+<section class="admin-section"><h2>Informations légales</h2><div class="account-policy-links"><button class="mini" type="button" data-policy="conditions">Conditions</button><button class="mini" type="button" data-policy="returns">Retours</button><button class="mini" type="button" data-policy="privacy">Confidentialité</button></div></section>
+<div class="account-actions"><button class="btn secondary" type="button" data-open-orders>Mes commandes</button><button class="btn secondary" type="button" data-view-tab="favorites">Favoris</button>${isOwner?'<button class="btn secondary" type="button" data-open-admin>Espace gérant</button>':''}<button class="btn secondary" type="button" data-logout>Se déconnecter</button><button class="btn secondary" type="button" data-delete-account>Supprimer mon compte</button></div><p class="account-status" id="account-status" role="status" aria-live="polite"></p></section>`;
 }
 function activeReservationsFor(productId,variantId='',now=Date.now()){return reservations.filter(item=>item.productId===productId&&(!variantId||item.variantId===variantId)&&item.status==='Nouvelle'&&timeMs(item.expiresAt)>now)}
 function availableQuantity(productId,variantId='',now=Date.now()){
@@ -436,12 +481,13 @@ $('#gbtn').onclick=async()=>{
   }
 };
 onAuthStateChanged(auth,u=>{
-  unsub.forEach(f=>f());unsub=[];if(announcementTimer){clearInterval(announcementTimer);announcementTimer=null}if(expiryTimer){clearInterval(expiryTimer);expiryTimer=null}if(!$('#ov').hidden)closeOv();U=u;isOwner=false;P=[];favs=[];WA='';announcements=[];reservations=[];slotBookings=[];orders=[];orderFinance=[];shop={...SHOP_DEFAULTS};privateDelivery={};promoCodes=[];legacyPromoCodes=[];promoRedemptions=[];userProfile={};clientProfiles=[];pickupPoints=[];configuredSlots=[];
+  unsub.forEach(f=>f());unsub=[];clearTimeout(cartCloudTimer);cartCloudReady=false;cartChangedBeforeCloudLoad=false;pendingCarts=[];if(announcementTimer){clearInterval(announcementTimer);announcementTimer=null}if(expiryTimer){clearInterval(expiryTimer);expiryTimer=null}if(storeStatusTimer){clearInterval(storeStatusTimer);storeStatusTimer=null}if(!$('#ov').hidden)closeOv();U=u;isOwner=false;P=[];favs=[];WA='';announcements=[];reservations=[];slotBookings=[];orders=[];orderFinance=[];shop={...SHOP_DEFAULTS};privateDelivery={};promoCodes=[];legacyPromoCodes=[];promoRedemptions=[];userProfile={};clientProfiles=[];pickupPoints=[];configuredSlots=[];
   $('#login').hidden=!!u;$('#app').hidden=!u;
   if(!u){cart={};renderCartCount();return}
   isOwner=u.email===OWNER&&u.emailVerified;
   loadCart();renderCartCount();
-  expiryTimer=setInterval(()=>{expireReservationsLocally();renderList();renderOrders();renderAdminOrders()},30000);
+  renderStoreBanner();storeStatusTimer=setInterval(renderStoreBanner,60000);
+  expiryTimer=setInterval(()=>{expireReservationsLocally();renderList();renderOrders();renderAdminOrders();renderAdminCarts()},30000);
   $('#me').innerHTML=u.photoURL?`<img src="${esc(u.photoURL)}" alt="">`:`<i>${esc((u.displayName||'C')[0])}</i>`;
   $('#me').setAttribute('aria-label',`Ouvrir le compte de ${(u.displayName||'mon compte').split(' ')[0]}`);
   setView('home');
@@ -451,14 +497,14 @@ onAuthStateChanged(auth,u=>{
   unsub.push(onSnapshot(collection(db,'products'),s=>{
     const records=s.docs.map(d=>({id:d.id,...d.data()}));
     P=records.map(item=>({...item,vendorId:item.vendorId||(isOwner?U.uid:''),vendorName:item.vendorName||item.seller||'LubuMarket'}));
-    $('#grid').setAttribute('aria-busy','false');setNotice('');renderList();renderAdminProductList();
+    $('#grid').setAttribute('aria-busy','false');setNotice('');renderList();renderAdminProductList();renderAdminCarts();
     const legacy=records.filter(item=>!item.vendorId||!item.vendorName);
     if(isOwner&&legacy.length)Promise.all(legacy.map(item=>updateDoc(doc(db,'products',item.id),{vendorId:item.vendorId||U.uid,vendorName:item.vendorName||item.seller||'LubuMarket'}))).catch(error=>{console.error('Impossible de compléter le vendeur de certains articles.',error);setNotice('Les informations du vendeur de certains articles n’ont pas pu être mises à jour.',true)});
   },()=>{setNotice('Le catalogue ne peut pas être actualisé. Vérifiez votre connexion puis réessayez.',true);$('#grid').setAttribute('aria-busy','false');if(!P.length)$('#grid').innerHTML='<p class="empty">Impossible de charger les articles pour le moment.</p>'}));
   unsub.push(onSnapshot(doc(db,'settings','shop'),s=>{
-    shop={...SHOP_DEFAULTS,...(s.data()||{})};shop.neighborhoods=Array.isArray(shop.neighborhoods)?shop.neighborhoods:[];shop.slots=Array.isArray(shop.slots)?shop.slots:DEFAULT_SLOTS;WA=String(shop.whatsapp||'').replace(/\D/g,'');announcement=shop.announcement||{};FX.rate=Number(shop.usdRate||0);FX.updatedAt=Number(shop.usdRateUpdatedAt||0);FX.fresh=FX.rate>0;
+    shop={...SHOP_DEFAULTS,...(s.data()||{})};shop.neighborhoods=Array.isArray(shop.neighborhoods)?shop.neighborhoods:[];shop.slots=Array.isArray(shop.slots)?shop.slots:DEFAULT_SLOTS;shop.openingHours={...DEFAULT_OPENING_HOURS,...(shop.openingHours||{})};shop.policies={...POLICY_DEFAULTS,...(shop.policies||{})};WA=String(shop.whatsapp||'').replace(/\D/g,'');announcement=shop.announcement||{};FX.rate=Number(shop.usdRate||0);FX.updatedAt=Number(shop.usdRateUpdatedAt||0);FX.fresh=FX.rate>0;
     $('#contact').innerHTML=WA?`<span class="question-icon" aria-hidden="true">?</span><a href="https://wa.me/${WA}" target="_blank" rel="noopener">Écrivez-nous pour plus d’informations</a>`:'';
-    $('#contact').hidden=!WA;renderAnnouncementCarousel();if($('#ov').querySelector('#shop-settings-form'))renderAdminSettings();
+    $('#contact').hidden=!WA;renderStoreBanner();renderAnnouncementCarousel();if($('#ov').querySelector('#shop-settings-form'))renderAdminSettings();
   },()=>{setNotice('Les informations de la boutique sont momentanément indisponibles.',true)}));
   unsub.push(onSnapshot(collection(db,'zones'),s=>{if(s.size)shop.neighborhoods=s.docs.map(d=>({id:d.id,...d.data()}));else shop.neighborhoods=shop.neighborhoods||[];renderSlotChoices();renderAdminOrders();if($('#ov').querySelector('#shop-settings-form'))renderAdminSettings()},error=>{console.error('Impossible de charger les quartiers.',error)}));
   unsub.push(onSnapshot(collection(db,'slots'),s=>{configuredSlots=s.docs.map(d=>({id:d.id,...d.data()}));if(!configuredSlots.length)configuredSlots=shop.slots||DEFAULT_SLOTS;renderSlotChoices();if($('#ov').querySelector('#shop-settings-form'))renderAdminSettings()},error=>{console.error('Impossible de charger les créneaux.',error)}));
@@ -471,13 +517,27 @@ onAuthStateChanged(auth,u=>{
   unsub.push(onSnapshot(orderQuery,s=>{orders=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>Number(b.createdAt?.toMillis?.()||b.createdAt||0)-Number(a.createdAt?.toMillis?.()||a.createdAt||0));expireReservationsLocally();renderOrders();renderAdminOrders();renderDeliveryOrders();if($('#ov .admin-dashboard')?.dataset.tab==='dashboard')admin('dashboard')},error=>{console.error('Impossible de charger les commandes.',error);setNotice('L’historique des commandes ne peut pas être chargé.',true)}));
   if(isOwner){
     unsub.push(onSnapshot(collection(db,'promoCodes'),s=>{legacyPromoCodes=s.docs.map(d=>({id:d.id,...d.data(),sourceCollection:'promoCodes'}));promoCodes=[...promoCodes.filter(item=>item.sourceCollection==='promos'),...legacyPromoCodes.filter(old=>!promoCodes.some(item=>item.id===old.id))];renderPromoAdminList()},error=>{console.error('Impossible de charger les anciennes promotions.',error)}));
-    unsub.push(onSnapshot(collection(db,'users'),s=>{clientProfiles=s.docs.map(d=>({id:d.id,...d.data()}));if($('#ov').querySelector('.admin-dashboard[data-tab="clients"]'))admin('clients')},error=>{console.error('Impossible de charger les profils clients.',error)}));
+    unsub.push(onSnapshot(collection(db,'users'),s=>{clientProfiles=s.docs.map(d=>({id:d.id,...d.data()}));if(['clients','carts'].includes($('#ov .admin-dashboard')?.dataset.tab))admin($('#ov .admin-dashboard').dataset.tab)},error=>{console.error('Impossible de charger les profils clients.',error)}));
+    unsub.push(onSnapshot(collectionGroup(db,'cart'),s=>{pendingCarts=s.docs.filter(item=>item.ref.parent.parent?.parent?.id==='users').map(item=>({id:item.ref.parent.parent.id,...item.data()}));renderAdminCarts()},error=>{console.error('Impossible de charger les paniers en attente.',error);setNotice('Les paniers en attente ne peuvent pas être chargés.',true)}));
     unsub.push(onSnapshot(doc(db,'settings','deliveryPrivate'),s=>{privateDelivery=s.data()||{};renderAdminOrders();if($('#ov').querySelector('#shop-settings-form'))renderAdminSettings()},error=>{console.error('Impossible de charger les tarifs coursier privés.',error)}));
     unsub.push(onSnapshot(collection(db,'promoRedemptions'),s=>{promoRedemptions=s.docs.map(d=>({id:d.id,...d.data()}));renderPromoAdminList();},error=>{console.error('Impossible de charger les utilisations promo.',error)}));
     unsub.push(onSnapshot(collection(db,'orderFinance'),s=>{orderFinance=s.docs.map(d=>({id:d.id,...d.data()}));renderAdminOrders();},error=>{console.error('Impossible de charger les marges des commandes.',error);setNotice('Les coûts de livraison historiques ne peuvent pas être chargés.',true)}));
   }
+  unsub.push(onSnapshot(doc(db,'users',u.uid,'cart','current'),s=>{
+    const changedBeforeLoad=cartChangedBeforeCloudLoad;
+    if(s.exists()&&!changedBeforeLoad){
+      const items=s.data().items;
+      cart=items&&typeof items==='object'&&!Array.isArray(items)?Object.fromEntries(Object.entries(items).filter(([,qty])=>Number.isInteger(qty)&&qty>0)):{};
+      saveCart(false);
+    }else if(!s.exists()&&!changedBeforeLoad&&cartCloudReady){cart={};saveCart(false)}
+    cartCloudReady=true;
+    cartChangedBeforeCloudLoad=false;
+    if(changedBeforeLoad||!s.exists()&&cartQuantity())scheduleCartCloudSync();
+    renderCartCount();if($('#ov .cart-sheet'))showCart();
+  },error=>{console.error('Impossible de synchroniser le panier.',error);setNotice('Le panier est conservé sur cet appareil; sa synchronisation cloud est indisponible.',true)}));
   unsub.push(onSnapshot(doc(db,'users',u.uid),s=>{userProfile=s.data()||{};favs=Array.isArray(userProfile.favs)?userProfile.favs:[];renderCartCount();renderList();if(st.view==='account')renderAccount()},error=>{console.error('Impossible de charger les favoris.',error);setNotice('Vos favoris ne peuvent pas être chargés pour le moment.',true)}));
-  setDoc(doc(db,'users',u.uid),{name:u.displayName||'',email:u.email||''},{merge:true}).catch(error=>{console.error('Impossible de synchroniser le profil.',error);setNotice('Votre profil n’a pas pu être synchronisé. Vous pouvez tout de même consulter le catalogue.',true)});
+  if(hasPendingAccountDeletion(u.uid))setNotice('La suppression de votre compte est en attente. Ouvrez Compte pour la terminer.',true);
+  else setDoc(doc(db,'users',u.uid),{name:u.displayName||'',email:u.email||''},{merge:true}).catch(error=>{console.error('Impossible de synchroniser le profil.',error);setNotice('Votre profil n’a pas pu être synchronisé. Vous pouvez tout de même consulter le catalogue.',true)});
 });
 
 function list(){
@@ -509,6 +569,63 @@ function adjustCart(productId,delta,variantId=''){
 }
 function cartSubtotal(){
   return Object.entries(cart).reduce((sum,[key,qty])=>{const {productId}=parseCartLine(key),p=P.find(item=>item.id===productId);if(!p)return sum;const unit=Number(p.promoFc)>0&&p.promoEndsAt&&Number(p.promoEndsAt)>Date.now()?Number(p.promoFc):Number(p.fc);return sum+unit*Number(qty)},0);
+}
+function cartEntries(items){
+  return Object.entries(items||{}).map(([key,qty])=>{
+    const {productId,variantId}=parseCartLine(key),product=P.find(item=>item.id===productId),variant=variantEntries(product).find(item=>item.id===variantId);
+    if(!product||!Number.isInteger(Number(qty))||Number(qty)<1)return null;
+    const label=[variant?.size,variant?.color].filter(Boolean).join(' · '),unit=Number(product.promoFc)>0&&timeMs(product.promoEndsAt)>Date.now()?Number(product.promoFc):Number(product.fc);
+    return {name:`${product.name}${label?` · ${label}`:''}`,quantity:Number(qty),total:unit*Number(qty)};
+  }).filter(Boolean);
+}
+function cartAgeLabel(value){
+  const age=Math.max(0,Date.now()-timeMs(value));if(!timeMs(value))return 'ancienneté inconnue';
+  const minutes=Math.floor(age/60000);if(minutes<60)return `il y a ${Math.max(1,minutes)} min`;
+  const hours=Math.floor(minutes/60);if(hours<24)return `il y a ${hours} h`;
+  return `il y a ${Math.floor(hours/24)} j`;
+}
+function normalizedPhone(phone){
+  const digits=String(phone||'').replace(/\D/g,'');return digits.startsWith('0')?`243${digits.slice(1)}`:digits;
+}
+function renderAdminCarts(){
+  const root=$('#pending-carts');if(!root)return;
+  const entries=pendingCarts.map(item=>({item,lines:cartEntries(item.items)})).filter(({lines})=>lines.length).sort((a,b)=>timeMs(a.item.updatedAt)-timeMs(b.item.updatedAt));
+  root.innerHTML=entries.length?entries.map(({item,lines})=>{
+    const profile=clientProfiles.find(client=>client.id===item.id),phone=normalizedPhone(profile?.phone),total=lines.reduce((sum,line)=>sum+line.total,0);
+    return `<article class="order-card"><div class="order-head"><h2>${esc(profile?.name||'Client')}</h2><span class="b">${esc(cartAgeLabel(item.updatedAt))}</span></div><p class="order-meta">${esc(phone||'Téléphone non renseigné')}</p><ul class="order-lines">${lines.map(line=>`<li>${esc(line.name)} × ${line.quantity} — ${fc(line.total)}</li>`).join('')}</ul><div class="checkout-total final"><span>Total estimé</span><strong>${fc(total)}</strong></div>${phone?`<button class="mini" type="button" data-cart-remind="${esc(item.id)}">Relancer sur WhatsApp</button>`:'<p class="mu">Ajoutez un numéro au profil pour relancer ce client sur WhatsApp.</p>'}</article>`;
+  }).join(''):'<p class="empty">Aucun panier en attente.</p>';
+}
+function csvCell(value){
+  const text=value&&typeof value==='object'?JSON.stringify(value):String(value??'');
+  const safe=/^[\t\r ]*[=+\-@]/.test(text)?`'${text}`:text;
+  return `"${safe.replace(/"/g,'""')}"`;
+}
+function csvFor(records){
+  if(!records.length)return '\uFEFF';
+  const headers=[...new Set(records.flatMap(record=>Object.keys(record)))];
+  return '\uFEFF'+[headers.map(csvCell).join(','),...records.map(record=>headers.map(key=>csvCell(record[key])).join(','))].join('\r\n');
+}
+function downloadExport(filename,content,type){
+  const url=URL.createObjectURL(new Blob([content],{type})),link=document.createElement('a');
+  link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function exportStoreData(){
+  if(!isOwner)throw new Error('Seul le gérant peut exporter les données.');
+  const status=$('#export-status');
+  const datasets={
+    produits:P,
+    commandes:orders,
+    clients:clientProfiles,
+    parametres:[{shop,privateDelivery,zones:shop.neighborhoods,slots:configuredSlots,pickupPoints,announcements}]
+  };
+  const date=new Date().toISOString().slice(0,10);
+  for(const [name,records] of Object.entries(datasets)){
+    downloadExport(`lubumarket-${name}-${date}.json`,JSON.stringify(records,null,2),'application/json;charset=utf-8');
+    await new Promise(resolve=>setTimeout(resolve,200));
+    downloadExport(`lubumarket-${name}-${date}.csv`,csvFor(records),'text/csv;charset=utf-8');
+    await new Promise(resolve=>setTimeout(resolve,200));
+  }
+  if(status)status.textContent='Huit fichiers JSON et CSV ont été préparés pour le téléchargement. Autorisez les téléchargements multiples si votre navigateur le demande.';
 }
 function selectedDeliveryFee(){
   if($('#delivery-type')?.value!=='livraison')return 0;
@@ -605,11 +722,59 @@ ${Number(shop.depositPercent||0)>0?`<label for="payment-provider">Opérateur de 
 function showCart(){cartView()}
 function renderOrders(){
   const root=$('#my-orders');if(!root)return;
-  root.innerHTML=orders.length?orders.map(order=>`<article class="order-card"><div class="order-head"><h3>Commande ${esc(order.orderNumber||order.id.slice(0,8).toUpperCase())}</h3><span class="b">${esc(orderStatus(order))}</span></div><p class="order-meta">${new Date(timeMs(order.createdAt)||Date.now()).toLocaleString('fr-FR')} · ${esc(order.deliveryType==='livraison'?'Livraison':order.deliveryType==='campus'?'Drop Campus':'Retrait')}${order.slotLabel?` · ${esc(order.slotLabel)}`:''}</p>${order.areaName?`<p class="order-meta">${esc(order.areaName)}</p>`:''}<ul class="order-lines">${(order.items||[]).map(item=>`<li>${esc(item.name)} × ${esc(item.qty)} — ${fc(Number(item.unitFc)*Number(item.qty))}</li>`).join('')}</ul><div class="checkout-total final"><span>Total commande</span><strong>${fc(order.totalFc)}</strong></div><p>Code de livraison : <strong>${esc(order.deliveryCode||'—')}</strong></p>${orderStatus(order)==='Expirée'?'<p class="mu">La réservation a expiré. Ajoutez de nouveau les articles au panier pour recommander.</p>':''}<button class="mini" type="button" data-receipt="${esc(order.id)}">Voir le reçu</button></article>`).join(''):'<p class="empty">Aucune commande pour le moment.</p>';
+  const myOrders=orders.filter(order=>order.uid===U?.uid);
+  root.innerHTML=myOrders.length?myOrders.map(order=>`<article class="order-card"><div class="order-head"><h3>Commande ${esc(order.orderNumber||order.id.slice(0,8).toUpperCase())}</h3><span class="b">${esc(orderStatus(order))}</span></div><p class="order-meta">${new Date(timeMs(order.createdAt)||Date.now()).toLocaleString('fr-FR')} · ${esc(order.deliveryType==='livraison'?'Livraison':order.deliveryType==='campus'?'Drop Campus':'Retrait')}${order.slotLabel?` · ${esc(order.slotLabel)}`:''}</p>${order.areaName?`<p class="order-meta">${esc(order.areaName)}</p>`:''}<ul class="order-lines">${(order.items||[]).map(item=>`<li>${esc(item.name)} × ${esc(item.qty)} — ${fc(Number(item.unitFc)*Number(item.qty))}</li>`).join('')}</ul><div class="checkout-total final"><span>Total commande</span><strong>${fc(order.totalFc)}</strong></div><p>Code de livraison : <strong>${esc(order.deliveryCode||'—')}</strong></p>${orderStatus(order)==='Expirée'?'<p class="mu">La réservation a expiré. Ajoutez de nouveau les articles au panier pour recommander.</p>':''}<div class="order-actions"><button class="mini" type="button" data-receipt="${esc(order.id)}">Voir le reçu</button>${orderStatus(order)==='Livrée'?`<button class="mini" type="button" data-report-problem="${esc(order.id)}">Signaler un problème</button>`:''}</div></article>`).join(''):'<p class="empty">Aucune commande pour le moment.</p>';
+}
+async function reportOrderProblem(orderId){
+  const order=orders.find(item=>item.id===orderId);if(!order||order.uid!==U?.uid||order.status!=='Livrée')throw new Error('Seules vos commandes livrées peuvent être signalées.');
+  const orderNumber=order.orderNumber||order.id.slice(0,8).toUpperCase(),message=`Bonjour LubuMarket, je signale un problème concernant ma commande ${orderNumber}.`,url=WA?`https://wa.me/${WA}?text=${encodeURIComponent(message)}`:'',popup=url?window.open('about:blank','_blank'):null;
+  try{await updateDoc(doc(db,'orders',orderId),{status:'litige'})}catch(error){popup?.close();throw error}
+  if(popup)popup.location.href=url;
+  else ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="problem-reported-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="problem-reported-title">Signalement enregistré</h2><p>La commande ${esc(orderNumber)} est maintenant en litige.${WA?'':' Le numéro WhatsApp de la boutique n’est pas configuré.'}</p>${url?`<a class="btn wa" href="${url}" target="_blank" rel="noopener">Ouvrir WhatsApp</a>`:''}</section>`);
 }
 function showOrders(){
   ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="orders-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="orders-title">Mes commandes</h2><div id="my-orders"></div></section>`);
   renderOrders();
+}
+function showPolicyPage(key){
+  if(!(key in POLICY_DEFAULTS))return;
+  const labels={conditions:'Conditions',returns:'Retours',privacy:'Confidentialité'};
+  ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="policy-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="policy-title">${labels[key]}</h2><p class="policy-content">${esc(shop.policies?.[key]||POLICY_DEFAULTS[key])}</p></section>`);
+}
+async function deleteClientAccount(button){
+  if(!U)return;
+  const user=U,uid=user.uid,status=$('#delete-account-status');let anonymizedOrders=0,anonymizedPromos=0,profileDeleted=false;
+  button.disabled=true;button.textContent='Suppression en cours…';if(status)status.textContent='Vérification de votre compte Google…';
+  try{
+    await reauthenticateWithPopup(user,new GoogleAuthProvider());
+    localStorage.setItem(accountDeletionKey(uid),'pending');
+    const [orderSnapshots,cartSnapshots,promoSnapshots]=await Promise.all([
+      getDocs(query(collection(db,'orders'),where('uid','==',uid))),
+      getDocs(collection(db,'users',uid,'cart')),
+      getDocs(query(collection(db,'promoRedemptions'),where('uid','==',uid)))
+    ]);
+    for(let start=0;start<orderSnapshots.size;start+=400){
+      const batch=writeBatch(db),chunk=orderSnapshots.docs.slice(start,start+400);
+      chunk.forEach(snapshot=>batch.update(snapshot.ref,{uid:deleteField(),phone:deleteField(),address:deleteField(),landmark:deleteField(),mapUrl:deleteField(),deliveryCode:deleteField(),gift:deleteField()}));
+      await batch.commit();anonymizedOrders+=chunk.length;
+    }
+    for(let start=0;start<promoSnapshots.size;start+=400){
+      const batch=writeBatch(db),chunk=promoSnapshots.docs.slice(start,start+400);
+      chunk.forEach(snapshot=>batch.update(snapshot.ref,{uid:deleteField()}));
+      await batch.commit();anonymizedPromos+=chunk.length;
+    }
+    for(let start=0;start<cartSnapshots.size;start+=400){
+      const batch=writeBatch(db);cartSnapshots.docs.slice(start,start+400).forEach(snapshot=>batch.delete(snapshot.ref));await batch.commit();
+    }
+    await deleteDoc(doc(db,'users',uid));profileDeleted=true;
+    try{localStorage.removeItem(`lubumarket.cart.${uid}`)}catch(error){console.warn('Impossible de supprimer le panier local.',error)}
+    await deleteUser(user);
+    try{localStorage.removeItem(accountDeletionKey(uid))}catch(error){console.warn('Impossible de supprimer le marqueur local.',error)}
+  }catch(error){
+    console.error('Suppression du compte incomplète.',error);
+    if(status)status.textContent=profileDeleted?'Les données Firestore ont été supprimées ou anonymisées, mais Firebase n’a pas pu supprimer la connexion. Réessayez ou reconnectez-vous.':anonymizedOrders||anonymizedPromos?`${anonymizedOrders} commande(s) et ${anonymizedPromos} utilisation(s) promotionnelle(s) ont été anonymisées, mais la suppression du compte a échoué. Vérifiez votre connexion puis réessayez.`:'Suppression annulée : confirmez votre identité Google et réessayez.';
+    button.disabled=false;button.textContent='Réessayer la suppression';
+  }
 }
 const ov=h=>{if($('#ov').hidden)focusBeforeModal=document.activeElement;$('#ov').classList.remove('admin-mode','product-mode');$('#ov').innerHTML=h;$('#ov').hidden=false;requestAnimationFrame(()=>$('#ov .x')?.focus())};
 const closeOv=()=>{$('#ov').hidden=true;$('#ov').classList.remove('admin-mode');$('#ov').innerHTML='';focusBeforeModal?.focus();focusBeforeModal=null;syncAppNavigation()};
@@ -648,6 +813,16 @@ function renderAdminSettings(){
   if(form.elements.orderInstructions)form.elements.orderInstructions.value=shop.orderInstructions||'';
   if(form.elements.lowStockThreshold)form.elements.lowStockThreshold.value=shop.lowStockThreshold??3;
   if(form.elements.whatsapp)form.elements.whatsapp.value=WA;
+  for(let day=0;day<WEEKDAYS.length;day++){
+    const hours=shop.openingHours?.[day]||DEFAULT_OPENING_HOURS[day];
+    const enabled=form.elements.namedItem(`opening-${day}-enabled`),opening=form.elements.namedItem(`opening-${day}-open`),closing=form.elements.namedItem(`opening-${day}-close`);
+    if(enabled)enabled.checked=!!hours.enabled;
+    if(opening)opening.value=hours.open||'08:00';
+    if(closing)closing.value=hours.close||'20:00';
+  }
+  for(const key of Object.keys(POLICY_DEFAULTS)){
+    const field=form.elements.namedItem(`policy-${key}`);if(field)field.value=shop.policies?.[key]||POLICY_DEFAULTS[key];
+  }
 }
 function renderAdminAnnouncements(){
   const root=$('#admin-announcements');if(!root)return;
@@ -709,8 +884,10 @@ function showReceipt(orderId){
 }
 function orderStatus(order){
   if(order.status==='Nouvelle'&&Number(order.expiresAt?.toMillis?.()||order.expiresAt||0)<=Date.now())return 'Expirée';
+  if(order.status==='litige')return 'Litige';
   return order.status||'Nouvelle';
 }
+const orderIsPaid=order=>['Payée','Livrée','litige'].includes(order.status)||!!order.paidAt;
 function renderAdminOrders(){
   const root=$('#admin-orders');if(!root)return;
   const statusFilter=$('#order-filter-status')?.value||'',areaFilter=$('#order-filter-area')?.value||'',slotFilter=$('#order-filter-slot')?.value||'';
@@ -841,11 +1018,13 @@ function detail(id){
   const similar=P.filter(item=>item.id!==p.id&&item.published!==false&&item.cat===p.cat).slice(0,4);
   const similarMarkup=similar.length?`<h3>Articles similaires</h3><div class="similar-products">${similar.map(item=>`<button class="similar-product" type="button" data-id="${esc(item.id)}"><strong>${esc(item.name)}</strong><span class="mu">${fc(item.fc)}</span></button>`).join('')}</div>`:'';
   const seller=p.vendorName||p.seller||'LubuMarket';
+  const questionMessage=`Bonjour LubuMarket, j’ai une question sur l’article « ${p.name} », vendu par ${seller}.`;
+  const questionLink=WA?`https://wa.me/${WA}?text=${encodeURIComponent(questionMessage)}`:'';
   const gallery=images.length?`<div class="product-gallery"><div class="gal" id="product-gallery" aria-label="Galerie photo de ${esc(p.name)}">${images.map((url,index)=>`<img src="${esc(url)}" alt="${esc(p.name)} — photo ${index+1}" loading="${index?'lazy':'eager'}" decoding="async">`).join('')}</div>${images.length>1?`<div class="gallery-dots" role="group" aria-label="Choisir une photo">${images.map((_,index)=>`<button type="button" data-gallery-slide="${index}" aria-label="Afficher la photo ${index+1}" aria-current="${index===0?'true':'false'}"></button>`).join('')}</div>`:''}</div>`:'';
   const variantControl=variants.length?`<label for="product-variant">Choisir une taille ou une couleur</label><select id="product-variant">${variants.map(item=>{const label=[item.size,item.color].filter(Boolean).join(' · ')||'Variante',quantity=availableQuantity(p.id,item.id);return `<option value="${esc(item.id)}"${item.id===selectedId?' selected':''}${quantity<1?' disabled':''}>${esc(label)} · ${quantity} en stock</option>`}).join('')}</select>`:'';
   const characteristics=specs.length?`<h3>Caractéristiques</h3><table class="characteristics"><caption class="sr">Caractéristiques de ${esc(p.name)}</caption><tbody>${specs.map(([key,value])=>`<tr><th scope="row">${esc(key)}</th><td>${esc(value)}</td></tr>`).join('')}</tbody></table>`:'';
   const extras=[...(highlights.length?[`<h3>Points forts</h3><ul>${highlights.map(value=>`<li>${esc(value)}</li>`).join('')}</ul>`]:[]),...(p.packageContents?[`<p><strong>Contenu du colis :</strong> ${esc(p.packageContents)}</p>`]:[]),...(p.warranty?[`<p><strong>Garantie :</strong> ${esc(p.warranty)}</p>`]:[]),`<p class="mu"><strong>Vendu par :</strong> ${esc(seller)}</p>`, `<p class="mu">${deliveryEta}</p>`,similarMarkup].join('');
-  ov(`<section class="sheet product-sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button>${gallery}<div class="pd"><span class="b">${esc(p.etat||'Article')} · ${p.reserved?'Réservé':stockLabel(stock)}</span><h2 id="product-title">${esc(p.name)}</h2><div class="pr" style="font-size:22px">${fc(p.promoFc&&p.promoEndsAt>Date.now()?p.promoFc:p.fc)}</div>${p.usd?`<div class="mu">≈ ${esc(p.usd)} $</div>`:''}<p>${esc(p.desc||'Contactez la boutique pour en savoir plus sur cet article.')}</p>${variantControl}<p class="product-stock" id="product-stock-status">${p.reserved?'Réservé':stockLabel(stock)}</p>${characteristics}${extras}<a class="btn o" href="${sh}" target="_blank" rel="noopener">Partager cet article</a><div class="product-action-bar"><button class="btn" type="button" data-add="${esc(p.id)}"${stock<1?' disabled':''}>${variants.length?'Ajouter cette variante':'Ajouter au panier'}</button><button class="btn wa" type="button" data-direct="${esc(p.id)}"${stock<1?' disabled':''}>Commander direct</button></div></div></section>`);
+  ov(`<section class="sheet product-sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button>${gallery}<div class="pd"><span class="b">${esc(p.etat||'Article')} · ${p.reserved?'Réservé':stockLabel(stock)}</span><h2 id="product-title">${esc(p.name)}</h2><div class="pr" style="font-size:22px">${fc(p.promoFc&&p.promoEndsAt>Date.now()?p.promoFc:p.fc)}</div>${p.usd?`<div class="mu">≈ ${esc(p.usd)} $</div>`:''}<p>${esc(p.desc||'Contactez la boutique pour en savoir plus sur cet article.')}</p>${variantControl}<p class="product-stock" id="product-stock-status">${p.reserved?'Réservé':stockLabel(stock)}</p>${characteristics}${extras}${questionLink?`<a class="btn wa" href="${questionLink}" target="_blank" rel="noopener">Poser une question sur cet article</a>`:'<p class="mu">Le numéro WhatsApp de la boutique n’est pas configuré.</p>'}<a class="btn o" href="${sh}" target="_blank" rel="noopener">Partager cet article</a><div class="product-action-bar"><button class="btn" type="button" data-add="${esc(p.id)}"${stock<1?' disabled':''}>${variants.length?'Ajouter cette variante':'Ajouter au panier'}</button><button class="btn wa" type="button" data-direct="${esc(p.id)}"${stock<1?' disabled':''}>Commander direct</button></div></div></section>`);
   $('#ov').classList.add('product-mode');
   const galleryElement=$('#product-gallery');
   if(galleryElement){
@@ -912,19 +1091,20 @@ function renderAdminProductList(){
 }
 function admin(tab='dashboard',editId=''){
   if(!isOwner)return;
-  const tabs=['dashboard','products','orders','deliveries','more','stocks','clients','payments','promotions','finances','settings'];
+  const tabs=['dashboard','products','orders','deliveries','more','stocks','clients','payments','promotions','finances','settings','carts'];
   if(!tabs.includes(tab))tab='dashboard';
   const product=editId&&editId!=='new'?P.find(item=>item.id===editId):null;
   if(editId&&editId!=='new'&&!product){alert('Cet article n’existe plus dans le catalogue.');return}
-  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Kinshasa'}).format(new Date()),kinNow=new Date(Date.now()+2*3600000),paid=orders.filter(order=>['Payée','Livrée'].includes(order.status)),salesFor=from=>paid.filter(order=>timeMs(order.createdAt)>=from).reduce((sum,order)=>sum+Number(order.totalFc||0),0),dayStart=Date.UTC(kinNow.getUTCFullYear(),kinNow.getUTCMonth(),kinNow.getUTCDate())-2*3600000,weekStart=dayStart-((kinNow.getUTCDay()+6)%7)*864e5,monthStart=Date.UTC(kinNow.getUTCFullYear(),kinNow.getUTCMonth(),1)-2*3600000;
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Kinshasa'}).format(new Date()),kinNow=new Date(Date.now()+2*3600000),paid=orders.filter(orderIsPaid),salesFor=from=>paid.filter(order=>timeMs(order.createdAt)>=from).reduce((sum,order)=>sum+Number(order.totalFc||0),0),dayStart=Date.UTC(kinNow.getUTCFullYear(),kinNow.getUTCMonth(),kinNow.getUTCDate())-2*3600000,weekStart=dayStart-((kinNow.getUTCDay()+6)%7)*864e5,monthStart=Date.UTC(kinNow.getUTCFullYear(),kinNow.getUTCMonth(),1)-2*3600000;
   const due=orders.filter(order=>orderStatus(order)==='Nouvelle'),deliveries=orders.filter(order=>['livraison','campus'].includes(order.deliveryType)&&order.deliveryDate===today&&!['Expirée','Annulée'].includes(order.status)),threshold=Number(shop.lowStockThreshold||3),low=P.filter(item=>Number(item.qty||0)-activeReservationsFor(item.id).reduce((sum,reservation)=>sum+Number(reservation.qty||0),0)<=Number(item.lowStockThreshold??threshold));
   const nav=[['dashboard','⌂','Tableau de bord'],['products','▦','Produits'],['orders','≡','Commandes'],['deliveries','↗','Livraisons'],['more','•••','Plus']];
   let content='';
-  if(tab==='dashboard')content=`<h1>Bonjour, ${esc((U.displayName||'Gérant').split(' ')[0])}</h1><p class="mu">Voici l’activité de votre boutique.</p><div class="admin-kpis"><article class="admin-kpi"><span>Ventes du jour</span><strong>${fc(salesFor(dayStart))}</strong></article><article class="admin-kpi"><span>Ventes cette semaine</span><strong>${fc(salesFor(weekStart))}</strong></article><article class="admin-kpi"><span>Ventes ce mois</span><strong>${fc(salesFor(monthStart))}</strong></article><article class="admin-kpi"><span>Marge livraison estimée</span><strong>${fc(orders.filter(order=>['Payée','Livrée'].includes(order.status)).reduce((sum,order)=>sum+Number(order.deliveryFeeFc||0)-Number(orderFinance.find(entry=>entry.id===order.id)?.courierCostFc??privateDelivery.courierCosts?.[order.areaId]??0),0))}</strong></article></div><div class="admin-section"><h2>À traiter</h2><p>${due.length} commande(s) en attente · ${deliveries.length} livraison(s) aujourd’hui</p><button class="btn" type="button" data-admin-tab="products" data-new-product>Ajouter un article</button></div><div class="admin-section"><h2>Stock bas (${low.length})</h2>${low.slice(0,6).map(item=>`<div class="admin-row"><strong>${esc(item.name)}</strong><span>${Math.max(0,Number(item.qty||0))} restant(s)</span></div>`).join('')||'<p class="mu">Aucun article sous le seuil.</p>'}<button class="mini" type="button" data-admin-tab="stocks">Gérer les stocks</button></div>`;
+  if(tab==='dashboard')content=`<h1>Bonjour, ${esc((U.displayName||'Gérant').split(' ')[0])}</h1><p class="mu">Voici l’activité de votre boutique.</p><div class="admin-kpis"><article class="admin-kpi"><span>Ventes du jour</span><strong>${fc(salesFor(dayStart))}</strong></article><article class="admin-kpi"><span>Ventes cette semaine</span><strong>${fc(salesFor(weekStart))}</strong></article><article class="admin-kpi"><span>Ventes ce mois</span><strong>${fc(salesFor(monthStart))}</strong></article><article class="admin-kpi"><span>Marge livraison estimée</span><strong>${fc(orders.filter(orderIsPaid).reduce((sum,order)=>sum+Number(order.deliveryFeeFc||0)-Number(orderFinance.find(entry=>entry.id===order.id)?.courierCostFc??privateDelivery.courierCosts?.[order.areaId]??0),0))}</strong></article></div><div class="admin-section"><h2>À traiter</h2><p>${due.length} commande(s) en attente · ${deliveries.length} livraison(s) aujourd’hui</p><button class="btn" type="button" data-admin-tab="products" data-new-product>Ajouter un article</button></div><div class="admin-section"><h2>Stock bas (${low.length})</h2>${low.slice(0,6).map(item=>`<div class="admin-row"><strong>${esc(item.name)}</strong><span>${Math.max(0,Number(item.qty||0))} restant(s)</span></div>`).join('')||'<p class="mu">Aucun article sous le seuil.</p>'}<button class="mini" type="button" data-admin-tab="stocks">Gérer les stocks</button></div>`;
   else if(tab==='products')content=`<div class="bar"><h1>Produits</h1><button class="btn" type="button" data-new-product>Ajouter un article</button></div>${editId!==''?productEditorMarkup(product):''}<input class="admin-product-search" id="admin-product-search" type="search" placeholder="Rechercher un produit…" aria-label="Rechercher un produit"><div id="admin-products-list" class="admin-products-list"></div>`;
-  else if(tab==='orders')content=`<h1>Commandes</h1><div class="order-form-grid"><div><label for="order-filter-status">Statut</label><select id="order-filter-status"><option value="">Tous</option><option>Nouvelle</option><option>Payée</option><option>Livrée</option><option>Expirée</option><option>Annulée</option></select></div><div><label for="order-filter-area">Quartier</label><select id="order-filter-area"><option value="">Tous les quartiers</option>${shop.neighborhoods.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}</select></div></div><label for="order-filter-slot">Date de livraison</label><input id="order-filter-slot" type="date"><div id="admin-orders"></div>`;
+  else if(tab==='orders')content=`<h1>Commandes</h1><div class="order-form-grid"><div><label for="order-filter-status">Statut</label><select id="order-filter-status"><option value="">Tous</option><option>Nouvelle</option><option>Payée</option><option>Livrée</option><option>Litige</option><option>Expirée</option><option>Annulée</option></select></div><div><label for="order-filter-area">Quartier</label><select id="order-filter-area"><option value="">Tous les quartiers</option>${shop.neighborhoods.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}</select></div></div><label for="order-filter-slot">Date de livraison</label><input id="order-filter-slot" type="date"><div id="admin-orders"></div>`;
   else if(tab==='deliveries')content=`<h1>Livraisons</h1><p class="mu">Commandes de livraison; confirme le paiement manuellement avant de marquer une commande payée.</p><div id="delivery-orders"></div>`;
-  else if(tab==='more')content=`<h1>Plus</h1><div class="admin-more-links">${[['stocks','Stocks'],['clients','Clients'],['payments','Paiements'],['promotions','Promotions'],['finances','Finances'],['settings','Paramètres']].map(([key,label])=>`<button class="mini" type="button" data-admin-tab="${key}">${label}</button>`).join('')}</div>`;
+  else if(tab==='more')content=`<h1>Plus</h1><div class="admin-more-links">${[['carts','Paniers en attente'],['stocks','Stocks'],['clients','Clients'],['payments','Paiements'],['promotions','Promotions'],['finances','Finances'],['settings','Paramètres']].map(([key,label])=>`<button class="mini" type="button" data-admin-tab="${key}">${label}</button>`).join('')}</div>`;
+  else if(tab==='carts')content=`<h1>Paniers en attente</h1><p class="mu">Les paniers enregistrés sont conservés jusqu’à la commande ou leur suppression par le client.</p><div id="pending-carts"></div>`;
   else if(tab==='stocks'){
     const stockRows=P.flatMap(item=>{const variants=variantEntries(item);return variants.length?variants.map(variant=>({item,variant,quantity:Number(variant.qty||0),available:availableQuantity(item.id,variant.id)})):[{item,variant:null,quantity:Number(item.qty||0),available:availableQuantity(item.id)}]});
     content=`<h1>Stocks</h1><form id="stock-threshold-form" class="admin-section"><label for="stock-threshold">Alerte stock bas (seuil général)</label><div class="admin-inline-form"><input id="stock-threshold" name="threshold" type="number" min="0" step="1" value="${threshold}"><button class="mini" type="submit">Enregistrer</button></div><p id="stock-status" class="mu" role="status"></p></form><div class="admin-section"><h2>Stocks par article et variante</h2>${stockRows.map(({item,variant,quantity,available})=>{const variantId=variant?.id||'',label=[variant?.size,variant?.color].filter(Boolean).join(' · '),low=quantity<=Number(item.lowStockThreshold??threshold);return `<div class="admin-row"><div class="admin-product"><strong>${esc(item.name)}${label?` · ${esc(label)}`:''}</strong><small>${quantity===0?'Épuisé':`${quantity} en stock · ${available} disponible(s)`}${low?' · Stock bas':''}</small></div><input aria-label="Quantité de ${esc(item.name)} ${esc(label)}" type="number" min="0" value="${quantity}" data-stock-qty="${esc(item.id)}" data-variant-id="${esc(variantId)}"><button class="mini" type="button" data-save-stock="${esc(item.id)}" data-variant-id="${esc(variantId)}">Enregistrer</button></div>`}).join('')||'<p class="mu">Aucun article en stock.</p>'}</div>`;
@@ -932,23 +1112,28 @@ function admin(tab='dashboard',editId=''){
   else if(tab==='clients')content=`<h1>Clients</h1><div class="admin-section">${clientProfiles.map(item=>`<div class="admin-row"><div class="admin-product"><strong>${esc(item.name||'Client')}</strong><small>${esc(item.email||'')} · ${esc(item.phone||'Téléphone non renseigné')}</small></div></div>`).join('')||'<p class="mu">Aucun profil client disponible.</p>'}</div>`;
   else if(tab==='payments')content=`<h1>Paiements</h1><div class="admin-section"><p>Les paiements mobile money sont confirmés manuellement par la boutique.</p><button class="btn" type="button" data-admin-tab="settings">Configurer les numéros et l’acompte</button></div>`;
   else if(tab==='promotions')content=`<h1>Promotions</h1><section class="admin-section"><form id="promo-form"><label for="promo-code-admin">Code</label><input id="promo-code-admin" name="code" maxlength="24" required><label for="promo-kind-admin">Réduction</label><select id="promo-kind-admin" name="kind"><option value="percent">Pourcentage</option><option value="fixed">Montant en FC</option></select><label for="promo-value-admin">Valeur</label><input id="promo-value-admin" name="value" type="number" min="1" required><label for="promo-expiry-admin">Date de fin</label><input id="promo-expiry-admin" name="expiresAt" type="datetime-local" required><label for="promo-limit-admin">Nombre maximum d’utilisations</label><input id="promo-limit-admin" name="usageLimit" type="number" min="1" value="10" required><label class="toggle-line"><input name="active" type="checkbox" checked> Activer ce code</label><button class="btn" type="submit">Créer le code promo</button><p id="promo-save-status" class="mu" role="status"></p></form><div id="admin-promo-list"></div></section>`;
-  else if(tab==='finances')content=`<h1>Finances</h1><div class="admin-kpis"><article class="admin-kpi"><span>Ventes confirmées · 30 jours</span><strong>${fc(salesFor(monthStart))}</strong></article><article class="admin-kpi"><span>Marge livraison estimée · 30 jours</span><strong>${fc(orders.filter(order=>timeMs(order.createdAt)>=monthStart&&['Payée','Livrée'].includes(order.status)).reduce((sum,order)=>sum+Number(order.deliveryFeeFc||0)-Number(orderFinance.find(entry=>entry.id===order.id)?.courierCostFc??privateDelivery.courierCosts?.[order.areaId]??0),0))}</strong></article></div><p class="mu">Estimations calculées à partir des commandes et frais connus; elles ne constituent pas une comptabilité.</p>`;
+  else if(tab==='finances')content=`<h1>Finances</h1><div class="admin-kpis"><article class="admin-kpi"><span>Ventes confirmées · 30 jours</span><strong>${fc(salesFor(monthStart))}</strong></article><article class="admin-kpi"><span>Marge livraison estimée · 30 jours</span><strong>${fc(orders.filter(order=>timeMs(order.createdAt)>=monthStart&&orderIsPaid(order)).reduce((sum,order)=>sum+Number(order.deliveryFeeFc||0)-Number(orderFinance.find(entry=>entry.id===order.id)?.courierCostFc??privateDelivery.courierCosts?.[order.areaId]??0),0))}</strong></article></div><p class="mu">Estimations calculées à partir des commandes et frais connus; elles ne constituent pas une comptabilité.</p>`;
   else content=`<h1>Paramètres</h1><section class="admin-section"><form id="shop-settings-form"><label for="shop-whatsapp">Numéro WhatsApp</label><input id="shop-whatsapp" name="whatsapp" inputmode="tel" value="${esc(WA)}" placeholder="243…"><label for="usd-rate">Taux indicatif (FC pour 1 USD)</label>  <input id="usd-rate" name="usdRate" type="number" min="0" step="0.01" value="${esc(shop.usdRate||'')}"><label for="deposit-setting">Acompte demandé (%)</label><input id="deposit-setting" name="depositPercent" type="number" min="0" max="100" value="${esc(shop.depositPercent||0)}"><label for="airtel-number">Airtel Money</label><input id="airtel-number" name="airtel" value="${esc(shop.paymentNumbers?.airtel||'')}"><label for="mpesa-number">M-Pesa</label><input id="mpesa-number" name="mpesa" value="${esc(shop.paymentNumbers?.mpesa||'')}"><label for="orange-number">Orange Money</label><input id="orange-number" name="orange" value="${esc(shop.paymentNumbers?.orange||'')}"><label for="pickup-point-setting">Points de retrait (nom|adresse, une ligne par point)</label><textarea name="pickupPoints" rows="3">${pickupPoints.map(item=>`${item.name}|${item.address}`).join('\n')||`${shop.pickupPoint?'Point relais|'+shop.pickupPoint:''}`}</textarea><label for="neighborhood-setting">Quartiers (id|nom|coût coursier|prix facturé|délai estimé)</label><textarea id="neighborhood-setting" name="neighborhoods" rows="4">${shop.neighborhoods.map(item=>`${item.id}|${item.name}|${privateDelivery.courierCosts?.[item.id]||0}|${item.fee}|${item.eta||''}`).join('\n')}</textarea><label for="slots-setting">Créneaux (id|début|fin|capacité|heure limite)</label><textarea id="slots-setting" name="slots" rows="4">${shop.slots.map(item=>`${item.id}|${item.start}|${item.end}|${item.max}|${item.cutoff}`).join('\n')}</textarea><label for="campus-location">Drops Campus · lieu</label><input id="campus-location" name="campusLocation" value="${esc(shop.dropCampus?.location||'')}"><div class="order-form-grid"><div><label for="campus-date">Date</label><input id="campus-date" name="campusDate" type="date" value="${esc(shop.dropCampus?.date||'')}"></div><div><label for="campus-hours">Heures (début-fin)</label><input id="campus-hours" name="campusHours" value="${esc(shop.dropCampus?.hours||'')}" placeholder="10:00-14:00"></div></div><label class="toggle-line"><input name="campusFreeDelivery" type="checkbox"${shop.dropCampus?.freeDelivery?' checked':''}> Livraison gratuite pour ce drop</label><label for="order-instructions">Comment commander</label><textarea id="order-instructions" name="orderInstructions" rows="3">${esc(shop.orderInstructions||'')}</textarea><label for="low-stock-setting">Seuil d’alerte stock bas</label><input id="low-stock-setting" name="lowStockThreshold" type="number" min="0" value="${threshold}"><button class="btn" type="submit">Enregistrer les paramètres</button><p id="shop-settings-status" class="mu" role="status"></p></form></section><section class="admin-section"><h2>Annonces d’accueil</h2><form id="announcement-form"><input type="hidden" name="announcementId"><label>Type</label><select name="type"><option value="promo">Promotion</option><option value="nouveaute">Nouveauté</option><option value="arrivage">Nouvel arrivage</option><option value="info">Information</option></select><label>Titre</label><input name="title" maxlength="70" required><label>Message</label><textarea name="message" rows="3" maxlength="240" required></textarea><label class="toggle-line"><input name="active" type="checkbox" checked> Activer l’annonce</label><button class="btn" type="submit">Enregistrer l’annonce</button><div id="admin-announcements"></div></section>`;
   ov(`<section class="admin-dashboard" role="dialog" aria-modal="true" aria-label="Espace gérant"><header class="admin-top"><span class="logo"><img class="logo-mark" src="./logo/icon.svg" alt="">LubuMarket</span><button class="mini" type="button" data-close>Fermer</button></header><main class="admin-content">${content}</main><nav class="admin-tabs" aria-label="Navigation gérant">${nav.map(([key,icon,label])=>`<button type="button" data-admin-tab="${key}" aria-current="${key===tab?'page':'false'}"><span aria-hidden="true">${icon}</span>${label}</button>`).join('')}</nav></section>`);
   $('#ov').classList.add('admin-mode');$('#ov .admin-dashboard').dataset.tab=tab;
+  const settingsForm=$('#shop-settings-form');
+  if(settingsForm){
+    const openingRows=WEEKDAYS.map((day,index)=>`<div class="admin-row"><label class="toggle-line"><input name="opening-${index}-enabled" type="checkbox"> ${day}</label><div class="order-form-grid"><div><label for="opening-${index}-open">Ouverture</label><input id="opening-${index}-open" name="opening-${index}-open" type="time"></div><div><label for="opening-${index}-close">Fermeture</label><input id="opening-${index}-close" name="opening-${index}-close" type="time"></div></div></div>`).join('');
+    settingsForm.insertAdjacentHTML('beforeend',`<section class="admin-section" data-settings-extension><h2>Horaires d’ouverture</h2><p class="mu">Heure de Lubumbashi (Africa/Kinshasa). Les commandes restent possibles en dehors de ces horaires.</p>${openingRows}<p>État manuel : ${shop.storeClosed?'Boutique fermée':'Ouverture selon les horaires'}</p><button class="mini" type="button" data-store-toggle>${shop.storeClosed?'Ouvrir la boutique':'Fermer la boutique'}</button></section><section class="admin-section"><h2>Conditions, retours et confidentialité</h2><label for="policy-conditions">Conditions</label><textarea id="policy-conditions" name="policy-conditions" rows="4" maxlength="12000">${esc(shop.policies?.conditions||POLICY_DEFAULTS.conditions)}</textarea><label for="policy-returns">Retours</label><textarea id="policy-returns" name="policy-returns" rows="4" maxlength="12000">${esc(shop.policies?.returns||POLICY_DEFAULTS.returns)}</textarea><label for="policy-privacy">Confidentialité</label><textarea id="policy-privacy" name="policy-privacy" rows="4" maxlength="12000">${esc(shop.policies?.privacy||POLICY_DEFAULTS.privacy)}</textarea><button class="btn" type="button" data-export-data>Exporter les données</button><p class="mu" id="export-status" role="status" aria-live="polite"></p></section>`);
+  }
   const announcementForm=$('#announcement-form');if(announcementForm)announcementForm.insertAdjacentHTML('afterbegin','<label for="announcement-image">URL de l’image (facultatif)</label><input id="announcement-image" name="imageUrl" type="url"><label for="announcement-target-type">Type de cible</label><select id="announcement-target-type" name="targetType"><option value="">Aucun bouton</option><option value="product">Article</option><option value="category">Catégorie</option><option value="promo">Code promo</option></select><label for="announcement-target">Cible</label><input id="announcement-target" name="target"><label for="announcement-button">Texte du bouton</label><input id="announcement-button" name="buttonLabel"><label for="announcement-start">Début</label><input id="announcement-start" name="startsAt" type="datetime-local"><label for="announcement-end">Fin</label><input id="announcement-end" name="endsAt" type="datetime-local">');
   $('#admin-product-search')?.addEventListener('input',renderAdminProductList);
   if($('#p-fc'))$('#p-fc').addEventListener('input',syncUsdPreview);
   if($('#p-cat'))$('#p-cat').onchange=()=>{const suggestions={'Téléphones':'Marque|…\nModèle|…\nStockage|…\nÉtat de la batterie|…','Ordinateurs':'Marque|…\nProcesseur|…\nMémoire|…\nStockage|…','Accessoires':'Type|…\nCompatibilité|…\nCouleur|…','Vêtements':'Taille|…\nCouleur|…\nMatière|…','Maison':'Matière|…\nDimensions|…\nCouleur|…'};$('#p-specs').placeholder=suggestions[$('#p-cat').value]||'Marque|…\nCouleur|…\nMatière|…'};
   if($('#order-filter-status')){$('#order-filter-status').onchange=renderAdminOrders;$('#order-filter-area').onchange=renderAdminOrders;$('#order-filter-slot').onchange=renderAdminOrders}
   if($('#f')){const form=$('#f');form.elements.seller.value=form.elements.seller.value||'LubuMarket';if(FX.rate>0)syncUsdPreview()}
-  renderAdminProductList();renderAdminSettings();renderAdminOrders();renderPromoAdminList();renderAdminAnnouncements();renderDeliveryOrders();
+  renderAdminProductList();renderAdminSettings();renderAdminOrders();renderAdminCarts();renderPromoAdminList();renderAdminAnnouncements();renderDeliveryOrders();
   if(tab==='products'||tab==='stocks')ensureInventoryDocs();
 }
 const shrink=f=>new Promise((resolve,reject)=>{const i=new Image(),url=URL.createObjectURL(f),release=()=>URL.revokeObjectURL(url);i.onload=()=>{try{const s=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;const ctx=c.getContext('2d');if(!ctx)throw new Error('Canvas indisponible');ctx.drawImage(i,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',.72))}catch(error){reject(error)}finally{release()}};i.onerror=()=>{release();reject(new Error('Image illisible'))};i.src=url});
 
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-cat],[data-fav],[data-id],[data-add],[data-direct],[data-cart-id],[data-close],[data-sold],[data-del],[data-edit],[data-cancel-edit],[data-rate-refresh],[data-wa],[data-paid],[data-delivered],[data-remind],[data-receipt],[data-print-receipt],[data-edit-announcement],[data-delete-announcement],[data-reset-announcement],[data-toggle-promo],[data-delete-promo],[data-announcement-type],[data-announcement-target],[data-admin-tab],[data-new-product],[data-duplicate],[data-publish],[data-reserve],[data-save-stock],[data-view-tab],[data-gallery-slide],[data-address-edit],[data-address-delete],[data-open-orders],[data-open-admin],[data-logout],[data-logout-confirm],#me,#open-cart');
+  const t=e.target.closest('[data-cat],[data-fav],[data-id],[data-add],[data-direct],[data-cart-id],[data-close],[data-sold],[data-del],[data-edit],[data-cancel-edit],[data-rate-refresh],[data-wa],[data-paid],[data-delivered],[data-remind],[data-receipt],[data-print-receipt],[data-edit-announcement],[data-delete-announcement],[data-reset-announcement],[data-toggle-promo],[data-delete-promo],[data-announcement-type],[data-announcement-target],[data-admin-tab],[data-new-product],[data-duplicate],[data-publish],[data-reserve],[data-save-stock],[data-view-tab],[data-gallery-slide],[data-address-edit],[data-address-delete],[data-open-orders],[data-open-admin],[data-logout],[data-logout-confirm],[data-policy],[data-delete-account],[data-delete-account-confirm],[data-report-problem],[data-store-toggle],[data-cart-remind],[data-export-data],#me,#open-cart');
   if(!t){if(e.target.id==='ov')closeOv();return}
   const d=t.dataset;
   try{
@@ -961,9 +1146,13 @@ document.addEventListener('click',async e=>{
       const addresses=[...(userProfile.addresses||[])];addresses.splice(Number(d.addressDelete),1);
       await setDoc(doc(db,'users',U.uid),{addresses},{merge:true});userProfile={...userProfile,addresses};renderAccount();$('#account-status').textContent='Adresse supprimée.';return;
     }
-    if(d.openOrders){showOrders();return}
-    if(d.openAdmin){admin();return}
-    if(d.logout){ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="logout-title"><h2 id="logout-title">Se déconnecter ?</h2><p>Voulez-vous vraiment vous déconnecter de votre compte LubuMarket ?</p><div class="order-actions"><button class="mini" type="button" data-close>Annuler</button><button class="btn" type="button" data-logout-confirm>Se déconnecter</button></div></section>`);return}
+    if('openOrders' in d){showOrders();return}
+    if('openAdmin' in d){admin();return}
+    if('policy' in d){showPolicyPage(d.policy);return}
+    if('deleteAccount' in d){ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="delete-account-title"><button class="x" type="button" data-close aria-label="Fermer">✕</button><h2 id="delete-account-title">Supprimer mon compte ?</h2><p>Votre profil, vos favoris et votre panier seront supprimés. Vos commandes seront conservées sans vos coordonnées personnelles.</p><p>Une vérification de votre compte Google sera demandée avant la suppression.</p><p id="delete-account-status" class="account-status" role="status" aria-live="polite"></p><div class="order-actions"><button class="mini" type="button" data-close>Annuler</button><button class="btn" type="button" data-delete-account-confirm>Supprimer définitivement</button></div></section>`);return}
+    if('deleteAccountConfirm' in d){await deleteClientAccount(t);return}
+    if('reportProblem' in d){await reportOrderProblem(d.reportProblem);return}
+    if('logout' in d){ov(`<section class="sheet pd" role="dialog" aria-modal="true" aria-labelledby="logout-title"><h2 id="logout-title">Se déconnecter ?</h2><p>Voulez-vous vraiment vous déconnecter de votre compte LubuMarket ?</p><div class="order-actions"><button class="mini" type="button" data-close>Annuler</button><button class="btn" type="button" data-logout-confirm>Se déconnecter</button></div></section>`);return}
     if('logoutConfirm' in d){await signOut(auth);return}
     if(d.fav){e.stopPropagation();if(!matchMedia('(prefers-reduced-motion: reduce)').matches){t.classList.remove('pulse');void t.offsetWidth;t.classList.add('pulse');t.addEventListener('animationend',()=>t.classList.remove('pulse'),{once:true})}await setDoc(doc(db,'users',U.uid),{favs:favs.includes(d.fav)?arrayRemove(d.fav):arrayUnion(d.fav)},{merge:true});return}
     if('newProduct' in d){admin('products','new');return}
@@ -975,6 +1164,23 @@ document.addEventListener('click',async e=>{
       const product=P.find(item=>item.id===d.direct),variantId=$('#product-variant')?.value||'';
       if(variantEntries(product).length&&!variantId){alert('Choisissez une variante avant de continuer.');return}
       cart={};cart[cartLineKey(d.direct,variantId)]=1;saveCart();renderCartCount();showCart();return;
+    }
+    if('storeToggle' in d){
+      if(!isOwner)return;
+      const storeClosed=!shop.storeClosed,tab=$('#ov .admin-dashboard')?.dataset.tab||'settings';
+      await setDoc(doc(db,'settings','shop'),{storeClosed},{merge:true});shop={...shop,storeClosed};renderStoreBanner();admin(tab);return;
+    }
+    if('cartRemind' in d){
+      if(!isOwner)return;
+      const cartItem=pendingCarts.find(item=>item.id===d.cartRemind),profile=clientProfiles.find(item=>item.id===d.cartRemind),phone=normalizedPhone(profile?.phone);
+      if(!cartItem||!phone)throw new Error('Ce client n’a pas de panier actif ou de numéro WhatsApp valide.');
+      const lines=cartEntries(cartItem.items),message=`Bonjour ${profile?.name||'client'}, votre panier LubuMarket est toujours en attente :\n${lines.map(line=>`• ${line.name} × ${line.quantity}`).join('\n')}\nTotal estimé : ${fc(lines.reduce((sum,line)=>sum+line.total,0))}\nSouhaitez-vous finaliser votre commande ?`;
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`,'_blank','noopener');return;
+    }
+    if('exportData' in d){
+      if(!isOwner)return;
+      const status=$('#export-status');if(status)status.textContent='Préparation des fichiers JSON et CSV…';
+      try{await exportStoreData()}catch(error){if(status)status.textContent='Échec de l’export. Vérifiez le stockage du navigateur puis réessayez.';throw error}return;
     }
     if(d.cartId){adjustCart(d.cartId,Number(d.delta),d.variantId||'');return}
     if('gallerySlide' in d){const gallery=$('#product-gallery'),slide=gallery?.querySelectorAll('img')[Number(d.gallerySlide)];if(slide)gallery.scrollTo({left:slide.offsetLeft,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});return}
@@ -1079,10 +1285,17 @@ document.addEventListener('submit',async e=>{
       if(pickupPoints.some(item=>!item.id||!item.address)||new Set(pickupPoints.map(item=>item.id)).size!==pickupPoints.length)throw new Error('Chaque point de retrait doit avoir un nom et une adresse uniques.');
       const campusHours=String(fd.get('campusHours')||'').trim(),dropCampus={location:String(fd.get('campusLocation')||'').trim(),date:String(fd.get('campusDate')||''),hours:campusHours,freeDelivery:fd.has('campusFreeDelivery')};
       if((dropCampus.location||dropCampus.date||campusHours)&&(!dropCampus.location||!dropCampus.date||!/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(campusHours)))throw new Error('Le Drop Campus doit avoir un lieu, une date et des heures au format HH:MM-HH:MM.');
+      const openingHours=Object.fromEntries(WEEKDAYS.map((day,index)=>{
+        const open=String(fd.get(`opening-${index}-open`)||'08:00'),close=String(fd.get(`opening-${index}-close`)||'20:00'),enabled=fd.has(`opening-${index}-enabled`);
+        if(enabled&&(!/^([01]\d|2[0-3]):[0-5]\d$/.test(open)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(close)||open>=close))throw new Error(`Vérifiez les heures d’ouverture du ${day.toLowerCase()}.`);
+        return [index,{enabled,open,close}];
+      }));
+      const policies=Object.fromEntries(Object.keys(POLICY_DEFAULTS).map(key=>[key,String(fd.get(`policy-${key}`)||'').trim()]));
+      if(Object.values(policies).some(value=>!value))throw new Error('Chaque page légale doit contenir un texte.');
       button.disabled=true;button.textContent='Enregistrement…';status.textContent='';
       const paymentNumbers={airtel:String(fd.get('airtel')||'').replace(/\D/g,''),mpesa:String(fd.get('mpesa')||'').replace(/\D/g,''),orange:String(fd.get('orange')||'').replace(/\D/g,'')};
       const slotMaxima=Object.fromEntries(slots.map(item=>[item.id,item.max]));
-      const shopData={whatsapp:String(fd.get('whatsapp')||'').replace(/\D/g,''),pickupPoint:pickupPoints[0]?.address||'',neighborhoods:neighborhoods.map(({id,name,fee,eta})=>({id,name,fee,eta})),slots,slotMaxima,depositPercent,paymentNumbers,usdRate,usdRateUpdatedAt:Date.now(),lowStockThreshold,dropCampus,orderInstructions:String(fd.get('orderInstructions')||'').trim()};
+      const shopData={whatsapp:String(fd.get('whatsapp')||'').replace(/\D/g,''),pickupPoint:pickupPoints[0]?.address||'',neighborhoods:neighborhoods.map(({id,name,fee,eta})=>({id,name,fee,eta})),slots,slotMaxima,depositPercent,paymentNumbers,usdRate,usdRateUpdatedAt:Date.now(),lowStockThreshold,dropCampus,orderInstructions:String(fd.get('orderInstructions')||'').trim(),openingHours,storeClosed:!!shop.storeClosed,policies};
       const replaceCollection=async(name,records)=>{
         const existing=await getDocs(collection(db,name)),wanted=new Set(records.map(item=>item.id));
         for(let start=0;start<Math.max(existing.size,records.length);start+=400){
@@ -1094,6 +1307,7 @@ document.addEventListener('submit',async e=>{
       };
       await Promise.all([replaceCollection('zones',neighborhoods.map(({courierCost,...zone})=>zone)),replaceCollection('slots',slots),replaceCollection('pickupPoints',pickupPoints),setDoc(doc(db,'settings','shop'),shopData,{merge:true}),setDoc(doc(db,'settings','deliveryPrivate'),{courierCosts},{merge:true})]);
       shop={...shop,...shopData};WA=shopData.whatsapp;FX.rate=usdRate;FX.fresh=usdRate>0;
+      renderStoreBanner();
       status.textContent='Paramètres enregistrés. Le gérant vérifie manuellement les paiements.';
     }catch(error){console.error('Impossible d’enregistrer les paramètres de livraison.',error);status.textContent=error.message||'Enregistrement impossible. Vérifiez votre connexion.'}
     finally{button.disabled=false;button.textContent='Enregistrer les paramètres'}

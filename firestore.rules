@@ -72,6 +72,29 @@ service cloud.firestore {
         && request.resource.data.status == 'Expirée';
     }
 
+    function reportDeliveredOrder() {
+      return signedIn()
+        && resource.data.uid == request.auth.uid
+        && resource.data.status == 'Livrée'
+        && request.resource.data.status == 'litige'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+    }
+
+    function anonymizeOwnOrder() {
+      let privateFields = ['uid', 'phone', 'address', 'landmark', 'mapUrl', 'deliveryCode', 'gift'];
+      return signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(privateFields)
+        && !request.resource.data.keys().hasAny(privateFields);
+    }
+
+    function anonymizeOwnPromoRedemption() {
+      return signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid'])
+        && !request.resource.data.keys().hasAny(['uid']);
+    }
+
     function reserveInventory(inventoryId) {
       let orderId = request.resource.data.lastOrderId;
       let order = orderAfter(orderId).data;
@@ -199,7 +222,23 @@ service cloud.firestore {
         && (!('addresses' in request.resource.data)
           || (request.resource.data.addresses is list && request.resource.data.addresses.size() <= 10))
         && (!('language' in request.resource.data) || request.resource.data.language == 'fr');
-      allow delete: if false;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/cart/{cartId} {
+      allow read: if owner() || (signedIn() && request.auth.uid == userId);
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && cartId == 'current'
+        && request.resource.data.keys().hasOnly(['items', 'updatedAt'])
+        && request.resource.data.items is map
+        && request.resource.data.items.size() <= 100
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if owner() || (signedIn() && request.auth.uid == userId);
+    }
+
+    match /{path=**}/cart/{cartId} {
+      allow read: if owner();
     }
 
     match /settings/shop {
@@ -238,7 +277,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if owner() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if validOrderCreate();
-      allow update: if owner() || expireOrder(orderId);
+      allow update: if owner() || expireOrder(orderId) || reportDeliveredOrder() || anonymizeOwnOrder();
       allow delete: if false;
     }
 
@@ -328,7 +367,7 @@ service cloud.firestore {
         && request.resource.data.status == 'Nouvelle'
         && orderAfter(orderId).data.uid == request.auth.uid
         && orderAfter(orderId).data.promoCode == request.resource.data.code;
-      allow update: if owner() || (
+      allow update: if owner() || anonymizeOwnPromoRedemption() || (
         signedIn()
         && orderExpired(orderId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
