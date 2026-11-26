@@ -95,6 +95,13 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['uid']);
     }
 
+    function anonymizeOwnProductQuestion() {
+      return signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid'])
+        && !request.resource.data.keys().hasAny(['uid']);
+    }
+
     function reserveInventory(inventoryId) {
       let orderId = request.resource.data.lastOrderId;
       let order = orderAfter(orderId).data;
@@ -216,12 +223,22 @@ service cloud.firestore {
       allow read: if owner() || (signedIn() && request.auth.uid == userId);
       allow create, update: if signedIn()
         && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly(['name', 'email', 'favs', 'phone', 'addresses', 'language'])
+        && request.resource.data.keys().hasOnly([
+          'name', 'email', 'favs', 'phone', 'addresses', 'language',
+          'university', 'neighborhood', 'neighborhoodName', 'onboardingComplete',
+          'wishlistShareEnabled', 'wishlistShareId'
+        ])
         && (!('email' in request.resource.data) || request.resource.data.email == request.auth.token.email)
         && (!('favs' in request.resource.data) || request.resource.data.favs is list)
         && (!('addresses' in request.resource.data)
           || (request.resource.data.addresses is list && request.resource.data.addresses.size() <= 10))
-        && (!('language' in request.resource.data) || request.resource.data.language == 'fr');
+        && (!('language' in request.resource.data) || request.resource.data.language == 'fr')
+        && (!('university' in request.resource.data) || (request.resource.data.university is string && request.resource.data.university.size() <= 120))
+        && (!('neighborhood' in request.resource.data) || (request.resource.data.neighborhood is string && request.resource.data.neighborhood.size() <= 100))
+        && (!('neighborhoodName' in request.resource.data) || (request.resource.data.neighborhoodName is string && request.resource.data.neighborhoodName.size() <= 100))
+        && (!('onboardingComplete' in request.resource.data) || request.resource.data.onboardingComplete is bool)
+        && (!('wishlistShareEnabled' in request.resource.data) || request.resource.data.wishlistShareEnabled is bool)
+        && (!('wishlistShareId' in request.resource.data) || (request.resource.data.wishlistShareId is string && request.resource.data.wishlistShareId.size() <= 64));
       allow delete: if signedIn() && request.auth.uid == userId;
     }
 
@@ -239,6 +256,59 @@ service cloud.firestore {
 
     match /{path=**}/cart/{cartId} {
       allow read: if owner();
+    }
+
+    match /users/{userId}/notifications/{notificationId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['type', 'title', 'message', 'target', 'read', 'createdAt'])
+        && request.resource.data.type in ['order', 'stock', 'announcement']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 500
+        && request.resource.data.target is string
+        && request.resource.data.target.size() <= 200
+        && request.resource.data.read == false
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/stockAlerts/{productId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['alertId', 'createdAt'])
+        && request.resource.data.alertId is string
+        && request.resource.data.createdAt == request.time;
+      allow delete: if signedIn() && request.auth.uid == userId;
+      allow update: if false;
+    }
+
+    match /wishlistShares/{shareId} {
+      allow get: if resource.data.active == true || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'active', 'products', 'updatedAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.active == false
+        && request.resource.data.products is list
+        && request.resource.data.products.size() <= 100
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.keys().hasOnly(['ownerUid', 'active', 'products', 'updatedAt'])
+        && request.resource.data.active is bool
+        && request.resource.data.products is list
+        && request.resource.data.products.size() <= 100
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     match /settings/shop {
@@ -272,6 +342,28 @@ service cloud.firestore {
     match /announcements/{announcementId} {
       allow read: if signedIn();
       allow create, update, delete: if owner();
+    }
+
+    match /productQuestions/{questionId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['productId', 'uid', 'question', 'createdAt'])
+        && request.resource.data.productId is string
+        && (!('published' in get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data)
+          || get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.published == true)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.question is string
+        && request.resource.data.question.size() >= 10
+        && request.resource.data.question.size() <= 500
+        && !request.resource.data.question.matches('(?s).*[0-9]([ .()/-]*[0-9]){6,}.*')
+        && request.resource.data.createdAt == request.time;
+      allow update: if (owner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'answeredAt'])
+        && request.resource.data.answer is string
+        && request.resource.data.answer.size() <= 1000
+        && request.resource.data.answeredAt == request.time)
+        || anonymizeOwnProductQuestion();
+      allow delete: if owner();
     }
 
     match /orders/{orderId} {
